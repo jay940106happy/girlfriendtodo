@@ -1,6 +1,5 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
-import { supabase } from './lib/supabase'
 
 const todoForm = reactive({
   todo: '',
@@ -11,14 +10,13 @@ const todoForm = reactive({
 const memoryForm = reactive({
   title: '',
   story: '',
-  memory_date: new Date().toISOString().slice(0, 10)
+  memory_date: new Date().toISOString().slice(0, 10),
+  image_url: ''
 })
 
 const activePage = ref('todos')
 const todos = ref([])
 const memories = ref([])
-const selectedImage = ref(null)
-const previewUrl = ref('')
 const loading = ref(true)
 const submittingTodo = ref(false)
 const submittingMemory = ref(false)
@@ -35,13 +33,11 @@ onMounted(async () => {
 })
 
 async function fetchTodos() {
-  const { data, error } = await supabase
-    .from('todo')
-    .select('id, todo, note, due_date, completed, created_at')
-    .order('created_at', { ascending: false })
+  const response = await fetch('/api/todos')
+  const data = await response.json().catch(() => [])
 
-  if (error) {
-    handleError('讀取待辦失敗，請先確認 Supabase 的 todo 資料表欄位是否已建立。', error)
+  if (!response.ok) {
+    handleError('讀取待辦失敗，請先確認 Neon 資料表是否已建立。', data)
     return
   }
 
@@ -49,14 +45,11 @@ async function fetchTodos() {
 }
 
 async function fetchMemories() {
-  const { data, error } = await supabase
-    .from('memories')
-    .select('id, title, story, memory_date, image_url, image_path, created_at')
-    .order('memory_date', { ascending: false })
-    .order('created_at', { ascending: false })
+  const response = await fetch('/api/memories')
+  const data = await response.json().catch(() => [])
 
-  if (error) {
-    handleError('讀取回憶失敗，請先建立 memories 資料表。', error)
+  if (!response.ok) {
+    handleError('讀取回憶失敗，請先確認 memories 資料表是否已建立。', data)
     return
   }
 
@@ -72,19 +65,23 @@ async function addTodo() {
   submittingTodo.value = true
   errorMessage.value = ''
 
-  const payload = {
-    todo: todoForm.todo.trim(),
-    note: todoForm.note.trim() || null,
-    due_date: todoForm.due_date || null,
-    completed: false
-  }
+  const response = await fetch('/api/todos', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      todo: todoForm.todo.trim(),
+      note: todoForm.note.trim() || null,
+      due_date: todoForm.due_date || null
+    })
+  })
 
-  const { error } = await supabase.from('todo').insert(payload)
-
+  const data = await response.json().catch(() => ({}))
   submittingTodo.value = false
 
-  if (error) {
-    handleError('新增待辦失敗。', error)
+  if (!response.ok) {
+    handleError('新增待辦失敗。', data)
     return
   }
 
@@ -98,39 +95,26 @@ async function addTodo() {
 async function toggleTodo(item) {
   errorMessage.value = ''
 
-  const { error } = await supabase
-    .from('todo')
-    .update({ completed: !item.completed })
-    .eq('id', item.id)
+  const response = await fetch('/api/todos', {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      id: item.id,
+      completed: !item.completed
+    })
+  })
 
-  if (error) {
-    handleError('更新待辦狀態失敗。', error)
+  const data = await response.json().catch(() => ({}))
+
+  if (!response.ok) {
+    handleError('更新待辦狀態失敗。', data)
     return
   }
 
-  statusMessage.value = item.completed ? '這個願望已經放回期待清單。' : '甜甜成就已經解鎖。'
+  statusMessage.value = item.completed ? '這個願望已經放回待完成。' : '這件事已經完成了。'
   await fetchTodos()
-}
-
-function handleImageChange(event) {
-  const [file] = event.target.files ?? []
-
-  if (!file) {
-    selectedImage.value = null
-    clearPreview()
-    return
-  }
-
-  selectedImage.value = file
-  clearPreview()
-  previewUrl.value = URL.createObjectURL(file)
-}
-
-function clearPreview() {
-  if (previewUrl.value) {
-    URL.revokeObjectURL(previewUrl.value)
-  }
-  previewUrl.value = ''
 }
 
 async function addMemory() {
@@ -142,82 +126,55 @@ async function addMemory() {
   submittingMemory.value = true
   errorMessage.value = ''
 
-  let imageUrl = null
-  let imagePath = null
+  const response = await fetch('/api/memories', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      title: memoryForm.title.trim(),
+      story: memoryForm.story.trim(),
+      memory_date: memoryForm.memory_date || new Date().toISOString().slice(0, 10),
+      image_url: memoryForm.image_url.trim() || null
+    })
+  })
 
-  if (selectedImage.value) {
-    const extension = selectedImage.value.name.split('.').pop()?.toLowerCase() || 'jpg'
-    const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${extension}`
-    const uploadPath = `memories/${fileName}`
-
-    const { error: uploadError } = await supabase.storage
-      .from('memory-images')
-      .upload(uploadPath, selectedImage.value, {
-        cacheControl: '3600',
-        upsert: false
-      })
-
-    if (uploadError) {
-      submittingMemory.value = false
-      handleError('圖片上傳失敗，請先確認 memory-images bucket 已建立。', uploadError)
-      return
-    }
-
-    const { data } = supabase.storage.from('memory-images').getPublicUrl(uploadPath)
-    imageUrl = data.publicUrl
-    imagePath = uploadPath
-  }
-
-  const payload = {
-    title: memoryForm.title.trim(),
-    story: memoryForm.story.trim(),
-    memory_date: memoryForm.memory_date || new Date().toISOString().slice(0, 10),
-    image_url: imageUrl,
-    image_path: imagePath
-  }
-
-  const { error } = await supabase.from('memories').insert(payload)
-
+  const data = await response.json().catch(() => ({}))
   submittingMemory.value = false
 
-  if (error) {
-    handleError('新增回憶失敗。', error)
+  if (!response.ok) {
+    handleError('新增回憶失敗。', data)
     return
   }
 
   memoryForm.title = ''
   memoryForm.story = ''
   memoryForm.memory_date = new Date().toISOString().slice(0, 10)
-  selectedImage.value = null
-  clearPreview()
-  const input = document.querySelector('#memory-image')
-  if (input) {
-    input.value = ''
-  }
-  statusMessage.value = '新的心動片段已經收進回憶花園。'
+  memoryForm.image_url = ''
+  statusMessage.value = '新的回憶已經記下來了。'
   await fetchMemories()
 }
 
 async function removeMemory(memory) {
   errorMessage.value = ''
 
-  if (memory.image_path) {
-    const { error: storageError } = await supabase.storage.from('memory-images').remove([memory.image_path])
+  const response = await fetch('/api/memories', {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      id: memory.id
+    })
+  })
 
-    if (storageError) {
-      handleError('刪除圖片失敗。', storageError)
-      return
-    }
-  }
-
-  const { error } = await supabase.from('memories').delete().eq('id', memory.id)
-
-  if (error) {
-    handleError('刪除回憶失敗。', error)
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}))
+    handleError('刪除回憶失敗。', data)
     return
   }
 
-  statusMessage.value = '這段回憶已從花園中收起。'
+  statusMessage.value = '這段回憶已經移除。'
   await fetchMemories()
 }
 
@@ -312,7 +269,7 @@ function formatDate(value) {
           </label>
 
           <button class="primary-button" type="submit" :disabled="submittingTodo">
-            {{ submittingTodo ? '收藏中...' : '放進戀愛清單' }}
+            {{ submittingTodo ? '儲存中...' : '新增代辦' }}
           </button>
         </form>
 
@@ -323,7 +280,7 @@ function formatDate(value) {
               <span>{{ pendingTodos.length }}</span>
             </div>
 
-            <div v-if="loading" class="empty-card shimmer">正在把願望整理進花園...</div>
+            <div v-if="loading" class="empty-card shimmer">讀取中...</div>
             <div v-else-if="!pendingTodos.length" class="empty-card">先寫下一個你們想一起完成的小計畫吧。</div>
 
             <article v-for="item in pendingTodos" :key="item.id" class="todo-card">
@@ -342,10 +299,8 @@ function formatDate(value) {
               <span>{{ completedTodos.length }}</span>
             </div>
 
-            <div v-if="loading" class="empty-card shimmer">正在整理戀愛勳章...</div>
-            <div v-else-if="!completedTodos.length" class="empty-card">
-              完成後會出現在這裡，像一面專屬於你們的成就牆。
-            </div>
+            <div v-if="loading" class="empty-card shimmer">讀取中...</div>
+            <div v-else-if="!completedTodos.length" class="empty-card">完成後會出現在這裡。</div>
 
             <article v-for="item in completedTodos" :key="item.id" class="todo-card done-card">
               <div class="todo-copy">
@@ -388,17 +343,21 @@ function formatDate(value) {
           </label>
 
           <label class="upload-box">
-            <input id="memory-image" type="file" accept="image/*" @change="handleImageChange" />
-            <span>點這裡上傳回憶照片</span>
-            <small>建議先在 Supabase 建立 `memory-images` bucket</small>
+            <span>照片網址</span>
+            <input
+              v-model="memoryForm.image_url"
+              type="url"
+              placeholder="https://images.example.com/your-photo.jpg"
+            />
+            <small>Neon 目前先只存圖片網址，之後可以再接圖片儲存服務。</small>
           </label>
 
-          <div v-if="previewUrl" class="preview-card">
-            <img :src="previewUrl" alt="回憶照片預覽" />
+          <div v-if="memoryForm.image_url" class="preview-card">
+            <img :src="memoryForm.image_url" alt="回憶照片預覽" />
           </div>
 
           <button class="primary-button" type="submit" :disabled="submittingMemory">
-            {{ submittingMemory ? '存進花園中...' : '寫進回憶花園' }}
+            {{ submittingMemory ? '儲存中...' : '新增回憶' }}
           </button>
         </form>
 
@@ -408,9 +367,9 @@ function formatDate(value) {
         </div>
 
         <div class="memory-stack">
-          <div v-if="loading" class="empty-card shimmer">正在沖洗你們的回憶底片...</div>
+          <div v-if="loading" class="empty-card shimmer">讀取中...</div>
           <div v-else-if="!memories.length" class="empty-card">
-            第一段回憶還沒放進來，現在就新增一個甜甜瞬間吧。
+            第一段回憶還沒放進來，現在就新增一個瞬間吧。
           </div>
 
           <article v-for="memory in memories" :key="memory.id" class="memory-card">
