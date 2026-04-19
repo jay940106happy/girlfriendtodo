@@ -29,6 +29,9 @@ const detailMemory = ref(null)
 const pendingTodoToMove = ref(null)
 const UPLOAD_RETRY_ATTEMPTS = 3
 const UPLOAD_TIMEOUT_MS = 25000
+const UPLOAD_MAX_DIMENSION = 1920
+const UPLOAD_TARGET_BYTES = 1200 * 1024
+const UPLOAD_MIN_QUALITY = 0.6
 
 const totalMemoryCount = computed(() => memories.value.length)
 const pageTitle = computed(() => (activePage.value === 'todos' ? '待辦' : '回憶'))
@@ -65,9 +68,12 @@ async function fetchMemories() {
 
 function normalizeMemory(memory) {
   const imageUrls = Array.isArray(memory.image_urls)
-    ? memory.image_urls.filter(Boolean)
+    ? memory.image_urls
+        .filter((value) => typeof value === 'string')
+        .map((value) => value.trim())
+        .filter((value) => value && /^https?:\/\//.test(value))
     : memory.image_url
-      ? [memory.image_url]
+      ? [String(memory.image_url).trim()].filter((value) => value && /^https?:\/\//.test(value))
       : []
 
   return {
@@ -284,7 +290,8 @@ async function uploadImages(event) {
 
     for (const file of files) {
       try {
-        const url = await uploadImageWithRetry(file)
+        const preparedFile = await prepareImageForUpload(file)
+        const url = await uploadImageWithRetry(preparedFile)
         uploadedUrls.push(url)
       } catch (error) {
         failedCount += 1
@@ -325,6 +332,71 @@ async function uploadImageWithRetry(file) {
   }
 
   throw lastError ?? new Error('Unknown upload error')
+}
+
+async function prepareImageForUpload(file) {
+  if (!file.type.startsWith('image/') || file.type === 'image/gif') {
+    return file
+  }
+
+  const objectUrl = URL.createObjectURL(file)
+
+  try {
+    const image = await loadImage(objectUrl)
+    const scale = Math.min(1, UPLOAD_MAX_DIMENSION / Math.max(image.width, image.height))
+    const targetWidth = Math.max(1, Math.round(image.width * scale))
+    const targetHeight = Math.max(1, Math.round(image.height * scale))
+
+    if (scale === 1 && file.size <= UPLOAD_TARGET_BYTES) {
+      return file
+    }
+
+    const canvas = document.createElement('canvas')
+    canvas.width = targetWidth
+    canvas.height = targetHeight
+
+    const context = canvas.getContext('2d')
+    if (!context) {
+      return file
+    }
+
+    context.drawImage(image, 0, 0, targetWidth, targetHeight)
+
+    let quality = 0.85
+    let blob = await canvasToBlob(canvas, 'image/jpeg', quality)
+
+    while (blob && blob.size > UPLOAD_TARGET_BYTES && quality > UPLOAD_MIN_QUALITY) {
+      quality = Math.max(UPLOAD_MIN_QUALITY, quality - 0.08)
+      blob = await canvasToBlob(canvas, 'image/jpeg', quality)
+    }
+
+    if (!blob) {
+      return file
+    }
+
+    const compressedName = file.name.replace(/\.[^.]+$/, '') + '.jpg'
+    return new File([blob], compressedName, { type: 'image/jpeg', lastModified: Date.now() })
+  } catch (error) {
+    console.error(error)
+    return file
+  } finally {
+    URL.revokeObjectURL(objectUrl)
+  }
+}
+
+function loadImage(objectUrl) {
+  return new Promise((resolve, reject) => {
+    const image = new Image()
+    image.onload = () => resolve(image)
+    image.onerror = () => reject(new Error('Image decode failed'))
+    image.src = objectUrl
+  })
+}
+
+function canvasToBlob(canvas, type, quality) {
+  return new Promise((resolve) => {
+    canvas.toBlob((blob) => resolve(blob), type, quality)
+  })
 }
 
 async function uploadSingleImage(file) {

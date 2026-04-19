@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "compress:existing-images": "node scripts/compress-existing-images.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.10.4",
@@ -15,6 +16,7 @@
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.2.3",
+    "sharp": "^0.34.5",
     "vite": "^5.4.11"
   }
 }
