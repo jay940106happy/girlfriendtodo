@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 
 const todoForm = reactive({
@@ -252,30 +252,43 @@ async function uploadImages(event) {
 
   try {
     const uploadedUrls = []
+    let failedCount = 0
 
     for (const file of files) {
       const formData = new FormData()
       formData.append('file', file)
 
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData
-      })
+      try {
+        const response = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData
+        })
 
-      const data = await response.json().catch(() => ({}))
+        const data = await response.json().catch(() => ({}))
 
-      if (!response.ok) {
-        handleError('圖片上傳失敗。', data)
-        uploadingImage.value = false
-        return
-      }
+        if (!response.ok || !data.url) {
+          failedCount += 1
+          continue
+        }
 
-      if (data.url) {
         uploadedUrls.push(data.url)
+      } catch (error) {
+        failedCount += 1
+        console.error(error)
       }
     }
 
-    memoryForm.image_urls = [...memoryForm.image_urls, ...uploadedUrls]
+    if (uploadedUrls.length) {
+      memoryForm.image_urls = [...memoryForm.image_urls, ...uploadedUrls]
+    }
+
+    if (failedCount > 0 && uploadedUrls.length > 0) {
+      statusMessage.value = `已上傳 ${uploadedUrls.length} 張，另有 ${failedCount} 張失敗，請重試失敗的照片。`
+      errorMessage.value = ''
+    } else if (failedCount > 0) {
+      handleError('圖片上傳失敗，請稍後重試。', { failedCount })
+    }
+
     event.target.value = ''
   } finally {
     uploadingImage.value = false
@@ -490,3 +503,4 @@ function formatDate(value) {
     </div>
   </div>
 </template>
+
