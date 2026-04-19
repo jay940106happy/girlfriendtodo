@@ -11,7 +11,7 @@ const memoryForm = reactive({
   title: '',
   story: '',
   memory_date: '',
-  image_url: ''
+  image_urls: []
 })
 
 const activePage = ref('todos')
@@ -55,7 +55,20 @@ async function fetchMemories() {
     return
   }
 
-  memories.value = data ?? []
+  memories.value = (data ?? []).map(normalizeMemory)
+}
+
+function normalizeMemory(memory) {
+  const imageUrls = Array.isArray(memory.image_urls)
+    ? memory.image_urls.filter(Boolean)
+    : memory.image_url
+      ? [memory.image_url]
+      : []
+
+  return {
+    ...memory,
+    image_urls: imageUrls
+  }
 }
 
 function openTodoComposer() {
@@ -76,7 +89,7 @@ function openMemoryComposer(memory = null) {
     memoryForm.title = memory.title ?? ''
     memoryForm.story = memory.story ?? ''
     memoryForm.memory_date = memory.memory_date ?? ''
-    memoryForm.image_url = memory.image_url ?? ''
+    memoryForm.image_urls = [...(memory.image_urls ?? [])]
     activePage.value = 'memories'
     return
   }
@@ -85,7 +98,7 @@ function openMemoryComposer(memory = null) {
   memoryForm.title = ''
   memoryForm.story = ''
   memoryForm.memory_date = ''
-  memoryForm.image_url = ''
+  memoryForm.image_urls = []
   activePage.value = 'memories'
 }
 
@@ -162,7 +175,7 @@ async function saveMemory() {
     title: memoryForm.title.trim(),
     story: memoryForm.story.trim(),
     memory_date: memoryForm.memory_date || null,
-    image_url: memoryForm.image_url.trim() || null
+    image_urls: memoryForm.image_urls
   }
 
   const response = await fetch('/api/memories', {
@@ -205,31 +218,47 @@ async function removeMemory(memory) {
   await fetchMemories()
 }
 
-async function uploadImage(event) {
-  const [file] = event.target.files ?? []
-  if (!file) return
+async function uploadImages(event) {
+  const files = Array.from(event.target.files ?? [])
+  if (!files.length) return
 
   uploadingImage.value = true
   errorMessage.value = ''
 
-  const formData = new FormData()
-  formData.append('file', file)
+  try {
+    const uploadedUrls = []
 
-  const response = await fetch('/api/upload', {
-    method: 'POST',
-    body: formData
-  })
+    for (const file of files) {
+      const formData = new FormData()
+      formData.append('file', file)
 
-  const data = await response.json().catch(() => ({}))
-  uploadingImage.value = false
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData
+      })
 
-  if (!response.ok) {
-    handleError('圖片上傳失敗。', data)
-    return
+      const data = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        handleError('圖片上傳失敗。', data)
+        uploadingImage.value = false
+        return
+      }
+
+      if (data.url) {
+        uploadedUrls.push(data.url)
+      }
+    }
+
+    memoryForm.image_urls = [...memoryForm.image_urls, ...uploadedUrls]
+    event.target.value = ''
+  } finally {
+    uploadingImage.value = false
   }
+}
 
-  memoryForm.image_url = data.url ?? ''
-  event.target.value = ''
+function removeImage(index) {
+  memoryForm.image_urls = memoryForm.image_urls.filter((_, imageIndex) => imageIndex !== index)
 }
 
 function handleError(message, error) {
@@ -297,7 +326,15 @@ function formatDate(value) {
         <div v-else-if="!memories.length" class="quiet-state">還沒有回憶</div>
 
         <article v-for="memory in memories" :key="memory.id" class="story-card story-card--memory">
-          <img v-if="memory.image_url" :src="memory.image_url" :alt="memory.title" class="story-image" />
+          <div v-if="memory.image_urls.length" class="story-gallery">
+            <img
+              v-for="(image, index) in memory.image_urls"
+              :key="`${memory.id}-${index}`"
+              :src="image"
+              :alt="memory.title"
+              class="story-image"
+            />
+          </div>
           <div class="story-card__body">
             <div class="story-meta">
               <span v-if="memory.memory_date">{{ formatDate(memory.memory_date) }}</span>
@@ -352,17 +389,22 @@ function formatDate(value) {
 
           <label class="upload-box upload-box--sheet">
             <span>上傳照片</span>
-            <input type="file" accept="image/*" @change="uploadImage" />
-            <small>{{ uploadingImage ? '上傳中...' : '選一張照片' }}</small>
+            <input type="file" accept="image/*" multiple @change="uploadImages" />
+            <small>{{ uploadingImage ? '上傳中...' : '可以一次選多張' }}</small>
           </label>
 
-          <div v-if="memoryForm.image_url" class="preview-card">
-            <img :src="memoryForm.image_url" alt="回憶照片預覽" />
+          <div v-if="memoryForm.image_urls.length" class="preview-grid">
+            <div v-for="(image, index) in memoryForm.image_urls" :key="`${image}-${index}`" class="preview-tile">
+              <img :src="image" alt="回憶照片預覽" />
+              <button class="preview-remove" type="button" @click="removeImage(index)">移除</button>
+            </div>
           </div>
 
-          <button class="primary-button" type="submit" :disabled="submittingMemory || uploadingImage">
-            {{ submittingMemory ? '儲存中...' : '儲存' }}
-          </button>
+          <div class="composer-actions">
+            <button class="primary-button" type="submit" :disabled="submittingMemory || uploadingImage">
+              {{ submittingMemory ? '儲存中...' : '儲存' }}
+            </button>
+          </div>
         </form>
       </section>
     </div>

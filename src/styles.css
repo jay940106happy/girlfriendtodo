@@ -202,6 +202,17 @@ img {
   object-fit: cover;
 }
 
+.story-gallery {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  padding: 6px 6px 0;
+}
+
+.story-gallery .story-image:first-child:nth-last-child(1) {
+  grid-column: 1 / -1;
+}
+
 .story-card--todo {
   display: flex;
   align-items: center;
@@ -272,6 +283,9 @@ img {
   padding: 20px;
   border-radius: 28px 28px 18px 18px;
   background: var(--paper-strong);
+  max-height: min(88vh, 820px);
+  overflow: auto;
+  padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
 }
 
 .composer-head {
@@ -325,6 +339,45 @@ img {
   border-radius: 14px;
 }
 
+.preview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.preview-tile {
+  position: relative;
+  overflow: hidden;
+  border-radius: 18px;
+  background: rgba(244, 241, 235, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+}
+
+.preview-tile img {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+}
+
+.preview-remove {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  border: 0;
+  border-radius: 999px;
+  padding: 7px 10px;
+  color: #fff;
+  background: rgba(47, 49, 44, 0.68);
+  cursor: pointer;
+}
+
+.composer-actions {
+  position: sticky;
+  bottom: 0;
+  padding-top: 8px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.92) 28%);
+}
+
 .primary-button {
   justify-self: start;
   padding: 12px 18px;
@@ -334,6 +387,11 @@ img {
 }
 
 @media (max-width: 720px) {
+  .app-shell {
+    width: min(100% - 18px, 820px);
+    padding-top: 18px;
+  }
+
   .hero-strip {
     flex-direction: column;
     align-items: flex-start;
@@ -350,5 +408,22 @@ img {
   .floating-add {
     right: 18px;
     bottom: 18px;
+  }
+
+  .composer-backdrop {
+    padding: 0;
+    align-items: end;
+  }
+
+  .composer-sheet {
+    width: 100%;
+    border-radius: 24px 24px 0 0;
+    max-height: 92vh;
+    padding: 18px 16px calc(20px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .preview-grid,
+  .story-gallery {
+    grid-template-columns: 1fr 1fr;
   }
 }
