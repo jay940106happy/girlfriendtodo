@@ -14,14 +14,7 @@ const memoryForm = reactive({
   memory_date: new Date().toISOString().slice(0, 10)
 })
 
-const heroMoments = [
-  '下次約會想吃的店',
-  '在雨天擁抱散步',
-  '第一次一起旅行',
-  '紀念日驚喜靈感'
-]
-
-const activeHeroIndex = ref(0)
+const activePage = ref('todos')
 const todos = ref([])
 const memories = ref([])
 const selectedImage = ref(null)
@@ -36,19 +29,10 @@ const pendingTodos = computed(() => todos.value.filter((item) => !item.completed
 const completedTodos = computed(() => todos.value.filter((item) => item.completed))
 const totalLoveScore = computed(() => completedTodos.value.length * 12 + memories.value.length * 18)
 
-let heroTimer = null
-
 onMounted(async () => {
-  startHeroRotation()
   await Promise.all([fetchTodos(), fetchMemories()])
   loading.value = false
 })
-
-function startHeroRotation() {
-  heroTimer = window.setInterval(() => {
-    activeHeroIndex.value = (activeHeroIndex.value + 1) % heroMoments.length
-  }, 2600)
-}
 
 async function fetchTodos() {
   const { data, error } = await supabase
@@ -259,52 +243,52 @@ function formatDate(value) {
 
 <template>
   <div class="app-shell">
-    <div class="ambient ambient-one"></div>
-    <div class="ambient ambient-two"></div>
-    <div class="ambient ambient-three"></div>
-
-    <header class="hero-card">
-      <div class="hero-copy">
-        <p class="eyebrow">Love Atlas</p>
-        <h1>把約會願望和每一段心動，藏進只屬於你們的花園。</h1>
-        <p class="hero-lead">
-          用柔軟的待辦清單安排未來，再把照片和文字變成會發光的戀愛紀錄。
-        </p>
-
-        <div class="rotating-pill">
-          <span class="pill-dot"></span>
-          <span>現在最適合記下的是：{{ heroMoments[activeHeroIndex] }}</span>
-        </div>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Shared Space</p>
+        <h1>兩個人的日常清單</h1>
+        <p class="topbar-lead">把想一起完成的事和重要回憶，安靜地放在同一個地方。</p>
       </div>
 
-      <div class="hero-stats">
+      <div class="summary-cards">
         <article>
           <strong>{{ pendingTodos.length }}</strong>
-          <span>等待一起完成</span>
-        </article>
-        <article>
-          <strong>{{ completedTodos.length }}</strong>
-          <span>甜甜成就</span>
+          <span>待完成</span>
         </article>
         <article>
           <strong>{{ memories.length }}</strong>
-          <span>收藏回憶</span>
-        </article>
-        <article class="score-card">
-          <strong>{{ totalLoveScore }}</strong>
-          <span>Love Points</span>
+          <span>回憶</span>
         </article>
       </div>
     </header>
 
-    <main class="main-grid">
-      <section class="panel panel-todo">
+    <nav class="page-switcher" aria-label="頁面切換">
+      <button
+        class="switch-button"
+        :class="{ active: activePage === 'todos' }"
+        type="button"
+        @click="activePage = 'todos'"
+      >
+        代辦
+      </button>
+      <button
+        class="switch-button"
+        :class="{ active: activePage === 'memories' }"
+        type="button"
+        @click="activePage = 'memories'"
+      >
+        回憶
+      </button>
+    </nav>
+
+    <main class="page-stack">
+      <section v-if="activePage === 'todos'" class="panel panel-todo">
         <div class="panel-head">
           <div>
-            <p class="section-tag">Dream Checklist</p>
+            <p class="section-tag">Todo</p>
             <h2>一起想做的事</h2>
           </div>
-          <span class="badge">Supabase Sync</span>
+          <span class="badge">{{ completedTodos.length }} 已完成</span>
         </div>
 
         <form class="love-form" @submit.prevent="addTodo">
@@ -335,7 +319,7 @@ function formatDate(value) {
         <div class="todo-layout">
           <div class="todo-column">
             <div class="column-head">
-              <h3>正在期待</h3>
+              <h3>待完成</h3>
               <span>{{ pendingTodos.length }}</span>
             </div>
 
@@ -354,7 +338,7 @@ function formatDate(value) {
 
           <div class="todo-column done-column">
             <div class="column-head">
-              <h3>甜蜜解鎖</h3>
+              <h3>已完成</h3>
               <span>{{ completedTodos.length }}</span>
             </div>
 
@@ -374,13 +358,13 @@ function formatDate(value) {
         </div>
       </section>
 
-      <section class="panel panel-memory">
+      <section v-else class="panel panel-memory">
         <div class="panel-head">
           <div>
-            <p class="section-tag">Memory Diary</p>
-            <h2>戀愛回憶底片</h2>
+            <p class="section-tag">Memories</p>
+            <h2>回憶紀錄</h2>
           </div>
-          <span class="badge">Photo + Story</span>
+          <span class="badge">{{ totalLoveScore }} points</span>
         </div>
 
         <form class="love-form" @submit.prevent="addMemory">
