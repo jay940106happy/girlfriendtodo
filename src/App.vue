@@ -24,6 +24,8 @@ const uploadingImage = ref(false)
 const statusMessage = ref('')
 const errorMessage = ref('')
 const composerOpen = ref(false)
+const menuOpenId = ref(null)
+const detailMemory = ref(null)
 
 const totalMemoryCount = computed(() => memories.value.length)
 const pageTitle = computed(() => (activePage.value === 'todos' ? '待辦' : '回憶'))
@@ -83,6 +85,7 @@ function openMemoryComposer(memory = null) {
   composerOpen.value = true
   statusMessage.value = ''
   errorMessage.value = ''
+  menuOpenId.value = null
 
   if (memory) {
     memoryForm.id = memory.id
@@ -105,6 +108,19 @@ function openMemoryComposer(memory = null) {
 function closeComposer() {
   composerOpen.value = false
   memoryForm.id = null
+}
+
+function toggleMenu(memoryId) {
+  menuOpenId.value = menuOpenId.value === memoryId ? null : memoryId
+}
+
+function openMemoryDetail(memory) {
+  detailMemory.value = memory
+  menuOpenId.value = null
+}
+
+function closeMemoryDetail() {
+  detailMemory.value = null
 }
 
 async function addTodo() {
@@ -198,6 +214,10 @@ async function saveMemory() {
 }
 
 async function removeMemory(memory) {
+  if (!window.confirm(`要刪除「${memory.title}」嗎？`)) {
+    return
+  }
+
   const response = await fetch('/api/memories', {
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json' },
@@ -214,6 +234,11 @@ async function removeMemory(memory) {
     closeComposer()
   }
 
+  if (detailMemory.value?.id === memory.id) {
+    closeMemoryDetail()
+  }
+
+  menuOpenId.value = null
   statusMessage.value = '已刪除回憶。'
   await fetchMemories()
 }
@@ -325,26 +350,39 @@ function formatDate(value) {
         <div v-if="loading" class="quiet-state">讀取中...</div>
         <div v-else-if="!memories.length" class="quiet-state">還沒有回憶</div>
 
-        <article v-for="memory in memories" :key="memory.id" class="story-card story-card--memory">
-          <div v-if="memory.image_urls.length" class="story-gallery">
-            <img
-              v-for="(image, index) in memory.image_urls"
-              :key="`${memory.id}-${index}`"
-              :src="image"
-              :alt="memory.title"
-              class="story-image"
-            />
+        <article
+          v-for="memory in memories"
+          :key="memory.id"
+          class="story-card story-card--memory"
+          @click="openMemoryDetail(memory)"
+        >
+          <div v-if="memory.image_urls.length" class="story-cover">
+            <img :src="memory.image_urls[0]" :alt="memory.title" class="story-image" />
+            <span v-if="memory.image_urls.length > 1" class="image-count">
+              +{{ memory.image_urls.length - 1 }}
+            </span>
           </div>
           <div class="story-card__body">
-            <div class="story-meta">
+            <div class="story-meta story-meta--top">
               <span v-if="memory.memory_date">{{ formatDate(memory.memory_date) }}</span>
+              <div class="memory-menu-wrap" @click.stop>
+                <button class="menu-trigger" type="button" @click="toggleMenu(memory.id)">•••</button>
+                <div v-if="menuOpenId === memory.id" class="memory-menu">
+                  <button
+                    type="button"
+                    @click="
+                      openMemoryComposer(memory)
+                      menuOpenId = null
+                    "
+                  >
+                    編輯
+                  </button>
+                  <button type="button" @click="removeMemory(memory)">刪除</button>
+                </div>
+              </div>
             </div>
             <h3>{{ memory.title }}</h3>
-            <p>{{ memory.story || ' ' }}</p>
-          </div>
-          <div class="story-actions">
-            <button class="inline-action" type="button" @click="openMemoryComposer(memory)">編輯</button>
-            <button class="inline-action inline-action--muted" type="button" @click="removeMemory(memory)">刪除</button>
+            <p class="memory-excerpt">{{ memory.story || ' ' }}</p>
           </div>
         </article>
       </section>
@@ -406,6 +444,30 @@ function formatDate(value) {
             </button>
           </div>
         </form>
+      </section>
+    </div>
+
+    <div v-if="detailMemory" class="composer-backdrop" @click.self="closeMemoryDetail">
+      <section class="composer-sheet composer-sheet--detail">
+        <div class="composer-head">
+          <div>
+            <h2>{{ detailMemory.title }}</h2>
+            <p v-if="detailMemory.memory_date" class="detail-date">{{ formatDate(detailMemory.memory_date) }}</p>
+          </div>
+          <button class="close-button" type="button" @click="closeMemoryDetail">關閉</button>
+        </div>
+
+        <div v-if="detailMemory.image_urls.length" class="detail-gallery">
+          <img
+            v-for="(image, index) in detailMemory.image_urls"
+            :key="`${detailMemory.id}-detail-${index}`"
+            :src="image"
+            :alt="detailMemory.title"
+            class="detail-image"
+          />
+        </div>
+
+        <p class="detail-story">{{ detailMemory.story || '還沒有補上文字。' }}</p>
       </section>
     </div>
   </div>
