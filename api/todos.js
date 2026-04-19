@@ -1,57 +1,72 @@
 import { sql } from './_db.js'
 
-export default async function handler(request, response) {
+export async function GET() {
   try {
-    if (request.method === 'GET') {
-      const rows = await sql`
-        select id, todo, note, due_date, completed, created_at
-        from todo
-        order by created_at desc
-      `
-      return response.status(200).json(rows)
-    }
+    const rows = await sql`
+      select id, todo, note, completed, created_at
+      from todo
+      where completed = false
+      order by created_at desc
+    `
 
-    if (request.method === 'POST') {
-      const { todo, note, due_date } = request.body ?? {}
-
-      if (!String(todo ?? '').trim()) {
-        return response.status(400).json({ error: 'Todo is required.' })
-      }
-
-      const [row] = await sql`
-        insert into todo (todo, note, due_date, completed)
-        values (
-          ${String(todo).trim()},
-          ${note ? String(note).trim() : null},
-          ${due_date || null},
-          false
-        )
-        returning id, todo, note, due_date, completed, created_at
-      `
-
-      return response.status(201).json(row)
-    }
-
-    if (request.method === 'PATCH') {
-      const { id, completed } = request.body ?? {}
-
-      if (!id) {
-        return response.status(400).json({ error: 'Todo id is required.' })
-      }
-
-      const [row] = await sql`
-        update todo
-        set completed = ${Boolean(completed)}
-        where id = ${id}
-        returning id, todo, note, due_date, completed, created_at
-      `
-
-      return response.status(200).json(row)
-    }
-
-    return response.status(405).json({ error: 'Method not allowed.' })
+    return Response.json(rows)
   } catch (error) {
     console.error(error)
-    return response.status(500).json({ error: 'Database request failed.' })
+    return Response.json({ error: 'Database request failed.' }, { status: 500 })
+  }
+}
+
+export async function POST(request) {
+  try {
+    const { todo, note } = await request.json()
+
+    if (!String(todo ?? '').trim()) {
+      return Response.json({ error: 'Todo is required.' }, { status: 400 })
+    }
+
+    const [row] = await sql`
+      insert into todo (todo, note, completed)
+      values (${String(todo).trim()}, ${note ? String(note).trim() : null}, false)
+      returning id, todo, note, completed, created_at
+    `
+
+    return Response.json(row, { status: 201 })
+  } catch (error) {
+    console.error(error)
+    return Response.json({ error: 'Database request failed.' }, { status: 500 })
+  }
+}
+
+export async function PATCH(request) {
+  try {
+    const { id, completed } = await request.json()
+
+    if (!id) {
+      return Response.json({ error: 'Todo id is required.' }, { status: 400 })
+    }
+
+    const [todo] = await sql`
+      update todo
+      set completed = ${Boolean(completed)}
+      where id = ${id}
+      returning id, todo, note, completed, created_at
+    `
+
+    if (!todo) {
+      return Response.json({ error: 'Todo not found.' }, { status: 404 })
+    }
+
+    if (Boolean(completed)) {
+      await sql`
+        insert into memories (title, story, source_todo_id)
+        values (${todo.todo}, ${todo.note ?? ''}, ${todo.id})
+        on conflict (source_todo_id) do nothing
+      `
+    }
+
+    return Response.json(todo)
+  } catch (error) {
+    console.error(error)
+    return Response.json({ error: 'Database request failed.' }, { status: 500 })
   }
 }

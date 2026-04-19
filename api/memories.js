@@ -1,51 +1,84 @@
 import { sql } from './_db.js'
 
-export default async function handler(request, response) {
+export async function GET() {
   try {
-    if (request.method === 'GET') {
-      const rows = await sql`
-        select id, title, story, memory_date, image_url, created_at
-        from memories
-        order by memory_date desc, created_at desc
-      `
-      return response.status(200).json(rows)
-    }
+    const rows = await sql`
+      select id, title, story, memory_date, image_url, created_at, source_todo_id
+      from memories
+      order by coalesce(memory_date, created_at::date) desc, created_at desc
+    `
 
-    if (request.method === 'POST') {
-      const { title, story, memory_date, image_url } = request.body ?? {}
-
-      if (!String(title ?? '').trim() || !String(story ?? '').trim()) {
-        return response.status(400).json({ error: 'Title and story are required.' })
-      }
-
-      const [row] = await sql`
-        insert into memories (title, story, memory_date, image_url)
-        values (
-          ${String(title).trim()},
-          ${String(story).trim()},
-          ${memory_date || null},
-          ${image_url ? String(image_url).trim() : null}
-        )
-        returning id, title, story, memory_date, image_url, created_at
-      `
-
-      return response.status(201).json(row)
-    }
-
-    if (request.method === 'DELETE') {
-      const { id } = request.body ?? {}
-
-      if (!id) {
-        return response.status(400).json({ error: 'Memory id is required.' })
-      }
-
-      await sql`delete from memories where id = ${id}`
-      return response.status(204).end()
-    }
-
-    return response.status(405).json({ error: 'Method not allowed.' })
+    return Response.json(rows)
   } catch (error) {
     console.error(error)
-    return response.status(500).json({ error: 'Database request failed.' })
+    return Response.json({ error: 'Database request failed.' }, { status: 500 })
+  }
+}
+
+export async function POST(request) {
+  try {
+    const { title, story, memory_date, image_url } = await request.json()
+
+    if (!String(title ?? '').trim()) {
+      return Response.json({ error: 'Title is required.' }, { status: 400 })
+    }
+
+    const [row] = await sql`
+      insert into memories (title, story, memory_date, image_url)
+      values (
+        ${String(title).trim()},
+        ${story ? String(story).trim() : ''},
+        ${memory_date || null},
+        ${image_url ? String(image_url).trim() : null}
+      )
+      returning id, title, story, memory_date, image_url, created_at, source_todo_id
+    `
+
+    return Response.json(row, { status: 201 })
+  } catch (error) {
+    console.error(error)
+    return Response.json({ error: 'Database request failed.' }, { status: 500 })
+  }
+}
+
+export async function PATCH(request) {
+  try {
+    const { id, title, story, memory_date, image_url } = await request.json()
+
+    if (!id || !String(title ?? '').trim()) {
+      return Response.json({ error: 'Memory id and title are required.' }, { status: 400 })
+    }
+
+    const [row] = await sql`
+      update memories
+      set
+        title = ${String(title).trim()},
+        story = ${story ? String(story).trim() : ''},
+        memory_date = ${memory_date || null},
+        image_url = ${image_url ? String(image_url).trim() : null}
+      where id = ${id}
+      returning id, title, story, memory_date, image_url, created_at, source_todo_id
+    `
+
+    return Response.json(row)
+  } catch (error) {
+    console.error(error)
+    return Response.json({ error: 'Database request failed.' }, { status: 500 })
+  }
+}
+
+export async function DELETE(request) {
+  try {
+    const { id } = await request.json()
+
+    if (!id) {
+      return Response.json({ error: 'Memory id is required.' }, { status: 400 })
+    }
+
+    await sql`delete from memories where id = ${id}`
+    return new Response(null, { status: 204 })
+  } catch (error) {
+    console.error(error)
+    return Response.json({ error: 'Database request failed.' }, { status: 500 })
   }
 }

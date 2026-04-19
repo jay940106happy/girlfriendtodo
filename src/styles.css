@@ -283,6 +283,10 @@ img {
   margin-top: 24px;
 }
 
+.todo-layout--single {
+  grid-template-columns: 1fr;
+}
+
 .todo-column {
   display: grid;
   gap: 14px;
@@ -394,6 +398,13 @@ img {
   display: grid;
   gap: 10px;
   margin: 18px 0;
+}
+
+.action-row,
+.memory-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .status-message,

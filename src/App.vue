@@ -3,14 +3,14 @@ import { computed, onMounted, reactive, ref } from 'vue'
 
 const todoForm = reactive({
   todo: '',
-  note: '',
-  due_date: ''
+  note: ''
 })
 
 const memoryForm = reactive({
+  id: null,
   title: '',
   story: '',
-  memory_date: new Date().toISOString().slice(0, 10),
+  memory_date: '',
   image_url: ''
 })
 
@@ -20,12 +20,11 @@ const memories = ref([])
 const loading = ref(true)
 const submittingTodo = ref(false)
 const submittingMemory = ref(false)
+const uploadingImage = ref(false)
 const statusMessage = ref('')
 const errorMessage = ref('')
 
-const pendingTodos = computed(() => todos.value.filter((item) => !item.completed))
-const completedTodos = computed(() => todos.value.filter((item) => item.completed))
-const totalLoveScore = computed(() => completedTodos.value.length * 12 + memories.value.length * 18)
+const totalMemoryCount = computed(() => memories.value.length)
 
 onMounted(async () => {
   await Promise.all([fetchTodos(), fetchMemories()])
@@ -37,7 +36,7 @@ async function fetchTodos() {
   const data = await response.json().catch(() => [])
 
   if (!response.ok) {
-    handleError('讀取待辦失敗，請先確認 Neon 資料表是否已建立。', data)
+    handleError('讀取代辦失敗。', data)
     return
   }
 
@@ -49,7 +48,7 @@ async function fetchMemories() {
   const data = await response.json().catch(() => [])
 
   if (!response.ok) {
-    handleError('讀取回憶失敗，請先確認 memories 資料表是否已建立。', data)
+    handleError('讀取回憶失敗。', data)
     return
   }
 
@@ -67,13 +66,10 @@ async function addTodo() {
 
   const response = await fetch('/api/todos', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       todo: todoForm.todo.trim(),
-      note: todoForm.note.trim() || null,
-      due_date: todoForm.due_date || null
+      note: todoForm.note.trim() || null
     })
   })
 
@@ -81,91 +77,102 @@ async function addTodo() {
   submittingTodo.value = false
 
   if (!response.ok) {
-    handleError('新增待辦失敗。', data)
+    handleError('新增代辦失敗。', data)
     return
   }
 
   todoForm.todo = ''
   todoForm.note = ''
-  todoForm.due_date = ''
-  statusMessage.value = '新的約會願望已經放進清單。'
+  statusMessage.value = '新的代辦已經加入。'
   await fetchTodos()
 }
 
-async function toggleTodo(item) {
+async function completeTodo(todo) {
   errorMessage.value = ''
 
   const response = await fetch('/api/todos', {
     method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json'
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      id: item.id,
-      completed: !item.completed
+      id: todo.id,
+      completed: true
     })
   })
 
   const data = await response.json().catch(() => ({}))
 
   if (!response.ok) {
-    handleError('更新待辦狀態失敗。', data)
+    handleError('完成代辦失敗。', data)
     return
   }
 
-  statusMessage.value = item.completed ? '這個願望已經放回待完成。' : '這件事已經完成了。'
-  await fetchTodos()
+  statusMessage.value = '這件事已經移進回憶，現在可以去補照片和內容。'
+  activePage.value = 'memories'
+  await Promise.all([fetchTodos(), fetchMemories()])
 }
 
-async function addMemory() {
-  if (!memoryForm.title.trim() || !memoryForm.story.trim()) {
-    errorMessage.value = '回憶名稱和文字內容都要填寫。'
+function startCreateMemory() {
+  memoryForm.id = null
+  memoryForm.title = ''
+  memoryForm.story = ''
+  memoryForm.memory_date = ''
+  memoryForm.image_url = ''
+  statusMessage.value = ''
+  errorMessage.value = ''
+}
+
+function startEditMemory(memory) {
+  memoryForm.id = memory.id
+  memoryForm.title = memory.title ?? ''
+  memoryForm.story = memory.story ?? ''
+  memoryForm.memory_date = memory.memory_date ?? ''
+  memoryForm.image_url = memory.image_url ?? ''
+  activePage.value = 'memories'
+  statusMessage.value = ''
+  errorMessage.value = ''
+}
+
+async function saveMemory() {
+  if (!memoryForm.title.trim()) {
+    errorMessage.value = '回憶標題要填寫。'
     return
   }
 
   submittingMemory.value = true
   errorMessage.value = ''
 
+  const payload = {
+    title: memoryForm.title.trim(),
+    story: memoryForm.story.trim(),
+    memory_date: memoryForm.memory_date || null,
+    image_url: memoryForm.image_url.trim() || null
+  }
+
+  const isEditing = Boolean(memoryForm.id)
   const response = await fetch('/api/memories', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      title: memoryForm.title.trim(),
-      story: memoryForm.story.trim(),
-      memory_date: memoryForm.memory_date || new Date().toISOString().slice(0, 10),
-      image_url: memoryForm.image_url.trim() || null
-    })
+    method: isEditing ? 'PATCH' : 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(isEditing ? { id: memoryForm.id, ...payload } : payload)
   })
 
   const data = await response.json().catch(() => ({}))
   submittingMemory.value = false
 
   if (!response.ok) {
-    handleError('新增回憶失敗。', data)
+    handleError(isEditing ? '更新回憶失敗。' : '新增回憶失敗。', data)
     return
   }
 
-  memoryForm.title = ''
-  memoryForm.story = ''
-  memoryForm.memory_date = new Date().toISOString().slice(0, 10)
-  memoryForm.image_url = ''
-  statusMessage.value = '新的回憶已經記下來了。'
+  statusMessage.value = isEditing ? '回憶已更新。' : '新的回憶已經記下來了。'
+  startCreateMemory()
   await fetchMemories()
 }
 
 async function removeMemory(memory) {
-  errorMessage.value = ''
-
   const response = await fetch('/api/memories', {
     method: 'DELETE',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      id: memory.id
-    })
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: memory.id })
   })
 
   if (!response.ok) {
@@ -174,8 +181,43 @@ async function removeMemory(memory) {
     return
   }
 
+  if (memoryForm.id === memory.id) {
+    startCreateMemory()
+  }
+
   statusMessage.value = '這段回憶已經移除。'
   await fetchMemories()
+}
+
+async function uploadImage(event) {
+  const [file] = event.target.files ?? []
+
+  if (!file) {
+    return
+  }
+
+  uploadingImage.value = true
+  errorMessage.value = ''
+
+  const formData = new FormData()
+  formData.append('file', file)
+
+  const response = await fetch('/api/upload', {
+    method: 'POST',
+    body: formData
+  })
+
+  const data = await response.json().catch(() => ({}))
+  uploadingImage.value = false
+
+  if (!response.ok) {
+    handleError('圖片上傳失敗。', data)
+    return
+  }
+
+  memoryForm.image_url = data.url ?? ''
+  statusMessage.value = '圖片已上傳，可以一起存進回憶。'
+  event.target.value = ''
 }
 
 function handleError(message, error) {
@@ -186,15 +228,14 @@ function handleError(message, error) {
 
 function formatDate(value) {
   if (!value) {
-    return '未設定日期'
+    return '尚未設定日期'
   }
 
-  const date = new Date(value)
   return new Intl.DateTimeFormat('zh-TW', {
     year: 'numeric',
     month: 'long',
     day: 'numeric'
-  }).format(date)
+  }).format(new Date(value))
 }
 </script>
 
@@ -204,16 +245,16 @@ function formatDate(value) {
       <div>
         <p class="eyebrow">Shared Space</p>
         <h1>兩個人的日常清單</h1>
-        <p class="topbar-lead">把想一起完成的事和重要回憶，安靜地放在同一個地方。</p>
+        <p class="topbar-lead">代辦完成後會進回憶，回憶則可以慢慢補上照片和文字。</p>
       </div>
 
       <div class="summary-cards">
         <article>
-          <strong>{{ pendingTodos.length }}</strong>
+          <strong>{{ todos.length }}</strong>
           <span>待完成</span>
         </article>
         <article>
-          <strong>{{ memories.length }}</strong>
+          <strong>{{ totalMemoryCount }}</strong>
           <span>回憶</span>
         </article>
       </div>
@@ -239,33 +280,28 @@ function formatDate(value) {
     </nav>
 
     <main class="page-stack">
-      <section v-if="activePage === 'todos'" class="panel panel-todo">
+      <section v-if="activePage === 'todos'" class="panel">
         <div class="panel-head">
           <div>
             <p class="section-tag">Todo</p>
             <h2>一起想做的事</h2>
           </div>
-          <span class="badge">{{ completedTodos.length }} 已完成</span>
+          <span class="badge">完成後自動進回憶</span>
         </div>
 
         <form class="love-form" @submit.prevent="addTodo">
           <label>
-            <span>下一個約會願望</span>
+            <span>代辦內容</span>
             <input v-model="todoForm.todo" type="text" placeholder="例如：一起去看海邊日出" />
           </label>
 
           <label>
-            <span>偷偷留一句備註</span>
+            <span>備註</span>
             <textarea
               v-model="todoForm.note"
               rows="3"
-              placeholder="像是：穿白色衣服、帶拍立得、要買熱可可"
+              placeholder="可以先寫一點想法，之後完成後會自動帶進回憶。"
             ></textarea>
-          </label>
-
-          <label>
-            <span>期待日期</span>
-            <input v-model="todoForm.due_date" type="date" />
           </label>
 
           <button class="primary-button" type="submit" :disabled="submittingTodo">
@@ -273,58 +309,39 @@ function formatDate(value) {
           </button>
         </form>
 
-        <div class="todo-layout">
+        <div class="todo-layout todo-layout--single">
           <div class="todo-column">
             <div class="column-head">
               <h3>待完成</h3>
-              <span>{{ pendingTodos.length }}</span>
+              <span>{{ todos.length }}</span>
             </div>
 
             <div v-if="loading" class="empty-card shimmer">讀取中...</div>
-            <div v-else-if="!pendingTodos.length" class="empty-card">先寫下一個你們想一起完成的小計畫吧。</div>
+            <div v-else-if="!todos.length" class="empty-card">目前沒有待辦，先新增一件想一起做的事吧。</div>
 
-            <article v-for="item in pendingTodos" :key="item.id" class="todo-card">
-              <div class="todo-copy">
-                <h4>{{ item.todo }}</h4>
-                <p v-if="item.note">{{ item.note }}</p>
-                <small v-if="item.due_date">希望在 {{ formatDate(item.due_date) }} 前完成</small>
-              </div>
-              <button class="secondary-button" type="button" @click="toggleTodo(item)">完成了</button>
-            </article>
-          </div>
-
-          <div class="todo-column done-column">
-            <div class="column-head">
-              <h3>已完成</h3>
-              <span>{{ completedTodos.length }}</span>
-            </div>
-
-            <div v-if="loading" class="empty-card shimmer">讀取中...</div>
-            <div v-else-if="!completedTodos.length" class="empty-card">完成後會出現在這裡。</div>
-
-            <article v-for="item in completedTodos" :key="item.id" class="todo-card done-card">
+            <article v-for="item in todos" :key="item.id" class="todo-card">
               <div class="todo-copy">
                 <h4>{{ item.todo }}</h4>
                 <p v-if="item.note">{{ item.note }}</p>
               </div>
-              <button class="secondary-button" type="button" @click="toggleTodo(item)">改回未完成</button>
+              <button class="secondary-button" type="button" @click="completeTodo(item)">完成並放進回憶</button>
             </article>
           </div>
         </div>
       </section>
 
-      <section v-else class="panel panel-memory">
+      <section v-else class="panel">
         <div class="panel-head">
           <div>
             <p class="section-tag">Memories</p>
             <h2>回憶紀錄</h2>
           </div>
-          <span class="badge">{{ totalLoveScore }} points</span>
+          <button class="secondary-button" type="button" @click="startCreateMemory">手動新增回憶</button>
         </div>
 
-        <form class="love-form" @submit.prevent="addMemory">
+        <form class="love-form" @submit.prevent="saveMemory">
           <label>
-            <span>這段回憶的名字</span>
+            <span>回憶標題</span>
             <input v-model="memoryForm.title" type="text" placeholder="例如：第一次一起逛夜市" />
           </label>
 
@@ -334,31 +351,37 @@ function formatDate(value) {
           </label>
 
           <label>
-            <span>把那天的心情寫下來</span>
+            <span>文字紀錄</span>
             <textarea
               v-model="memoryForm.story"
               rows="5"
-              placeholder="例如：你笑著幫我擦掉嘴角的醬，我那時候就想把這一幕記一輩子。"
+              placeholder="完成代辦後，可以再慢慢補上那天發生的事和感覺。"
             ></textarea>
           </label>
 
           <label class="upload-box">
-            <span>照片網址</span>
-            <input
-              v-model="memoryForm.image_url"
-              type="url"
-              placeholder="https://images.example.com/your-photo.jpg"
-            />
-            <small>Neon 目前先只存圖片網址，之後可以再接圖片儲存服務。</small>
+            <span>上傳照片</span>
+            <input type="file" accept="image/*" @change="uploadImage" />
+            <small>{{ uploadingImage ? '上傳中...' : '圖片會存到 Vercel Blob。' }}</small>
           </label>
 
           <div v-if="memoryForm.image_url" class="preview-card">
             <img :src="memoryForm.image_url" alt="回憶照片預覽" />
           </div>
 
-          <button class="primary-button" type="submit" :disabled="submittingMemory">
-            {{ submittingMemory ? '儲存中...' : '新增回憶' }}
-          </button>
+          <div class="action-row">
+            <button class="primary-button" type="submit" :disabled="submittingMemory || uploadingImage">
+              {{ submittingMemory ? '儲存中...' : memoryForm.id ? '更新回憶' : '新增回憶' }}
+            </button>
+            <button
+              v-if="memoryForm.id"
+              class="secondary-button"
+              type="button"
+              @click="startCreateMemory"
+            >
+              取消編輯
+            </button>
+          </div>
         </form>
 
         <div class="message-stack">
@@ -368,9 +391,7 @@ function formatDate(value) {
 
         <div class="memory-stack">
           <div v-if="loading" class="empty-card shimmer">讀取中...</div>
-          <div v-else-if="!memories.length" class="empty-card">
-            第一段回憶還沒放進來，現在就新增一個瞬間吧。
-          </div>
+          <div v-else-if="!memories.length" class="empty-card">還沒有回憶，完成一件代辦或手動新增一段吧。</div>
 
           <article v-for="memory in memories" :key="memory.id" class="memory-card">
             <div class="memory-top">
@@ -378,10 +399,13 @@ function formatDate(value) {
                 <span class="date-chip">{{ formatDate(memory.memory_date) }}</span>
                 <h3>{{ memory.title }}</h3>
               </div>
-              <button class="icon-button" type="button" @click="removeMemory(memory)">刪除</button>
+              <div class="memory-actions">
+                <button class="icon-button" type="button" @click="startEditMemory(memory)">編輯</button>
+                <button class="icon-button" type="button" @click="removeMemory(memory)">刪除</button>
+              </div>
             </div>
 
-            <p>{{ memory.story }}</p>
+            <p>{{ memory.story || '還沒補文字，可以之後再編輯。' }}</p>
             <img v-if="memory.image_url" :src="memory.image_url" :alt="memory.title" />
           </article>
         </div>
