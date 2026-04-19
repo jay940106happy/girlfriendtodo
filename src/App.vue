@@ -26,6 +26,8 @@ const errorMessage = ref('')
 const composerOpen = ref(false)
 const menuOpenId = ref(null)
 const detailMemory = ref(null)
+const UPLOAD_RETRY_ATTEMPTS = 3
+const UPLOAD_TIMEOUT_MS = 25000
 
 const totalMemoryCount = computed(() => memories.value.length)
 const pageTitle = computed(() => (activePage.value === 'todos' ? '待辦' : '回憶'))
@@ -214,7 +216,7 @@ async function saveMemory() {
 }
 
 async function removeMemory(memory) {
-  if (!window.confirm(`??????${memory.title}???`)) {
+  if (!window.confirm(`確定要刪除「${memory.title}」嗎？`)) {
     return
   }
 
@@ -249,29 +251,16 @@ async function uploadImages(event) {
 
   uploadingImage.value = true
   errorMessage.value = ''
+  statusMessage.value = ''
 
   try {
     const uploadedUrls = []
     let failedCount = 0
 
     for (const file of files) {
-      const formData = new FormData()
-      formData.append('file', file)
-
       try {
-        const response = await fetch('/api/upload', {
-          method: 'POST',
-          body: formData
-        })
-
-        const data = await response.json().catch(() => ({}))
-
-        if (!response.ok || !data.url) {
-          failedCount += 1
-          continue
-        }
-
-        uploadedUrls.push(data.url)
+        const url = await uploadImageWithRetry(file)
+        uploadedUrls.push(url)
       } catch (error) {
         failedCount += 1
         console.error(error)
@@ -292,6 +281,50 @@ async function uploadImages(event) {
     event.target.value = ''
   } finally {
     uploadingImage.value = false
+  }
+}
+
+async function uploadImageWithRetry(file) {
+  let lastError = null
+
+  for (let attempt = 1; attempt <= UPLOAD_RETRY_ATTEMPTS; attempt += 1) {
+    try {
+      return await uploadSingleImage(file)
+    } catch (error) {
+      lastError = error
+
+      if (attempt < UPLOAD_RETRY_ATTEMPTS) {
+        await new Promise((resolve) => setTimeout(resolve, attempt * 700))
+      }
+    }
+  }
+
+  throw lastError ?? new Error('Unknown upload error')
+}
+
+async function uploadSingleImage(file) {
+  const formData = new FormData()
+  formData.append('file', file)
+
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS)
+
+  try {
+    const response = await fetch('/api/upload', {
+      method: 'POST',
+      body: formData,
+      signal: controller.signal
+    })
+
+    const data = await response.json().catch(() => ({}))
+
+    if (!response.ok || !data.url) {
+      throw new Error(data?.error || 'Upload request failed')
+    }
+
+    return data.url
+  } finally {
+    clearTimeout(timeoutId)
   }
 }
 
@@ -366,10 +399,10 @@ function formatDate(value) {
           <button
             class="inline-action inline-action--complete"
             type="button"
-            title="???????"
+            title="點一下完成待辦"
             @click="completeTodo(item)"
           >
-            ??
+            完成
           </button>
         </article>
       </section>
