@@ -377,25 +377,6 @@ img {
   cursor: pointer;
 }
 
-.temp-admin-button {
-  position: fixed;
-  right: 28px;
-  bottom: 92px;
-  border: 0;
-  border-radius: 999px;
-  padding: 9px 14px;
-  color: #fff;
-  background: rgba(47, 49, 44, 0.88);
-  box-shadow: 0 10px 22px rgba(47, 49, 44, 0.24);
-  cursor: pointer;
-  z-index: 5;
-}
-
-.temp-admin-button:disabled {
-  opacity: 0.7;
-  cursor: wait;
-}
-
 .composer-backdrop {
   position: fixed;
   inset: 0;
@@ -582,11 +563,6 @@ img {
   .floating-add {
     right: 18px;
     bottom: 18px;
-  }
-
-  .temp-admin-button {
-    right: 18px;
-    bottom: 84px;
   }
 
   .composer-backdrop {

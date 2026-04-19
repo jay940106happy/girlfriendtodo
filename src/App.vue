@@ -27,7 +27,6 @@ const composerOpen = ref(false)
 const menuOpenId = ref(null)
 const detailMemory = ref(null)
 const pendingTodoToMove = ref(null)
-const runningImageRecovery = ref(false)
 const UPLOAD_RETRY_ATTEMPTS = 3
 const UPLOAD_TIMEOUT_MS = 25000
 const UPLOAD_MAX_DIMENSION = 1920
@@ -454,53 +453,6 @@ function formatDate(value) {
   }).format(new Date(value))
 }
 
-async function runTemporaryImageRecovery() {
-  const adminKey = window.prompt('請輸入管理密鑰（可留空，若後端未設定密鑰）')
-  if (adminKey === null) return
-
-  runningImageRecovery.value = true
-  statusMessage.value = ''
-  errorMessage.value = ''
-
-  try {
-    let loop = 0
-    let totalProcessedMemories = 0
-    let totalCompressedImages = 0
-    let totalFailedImages = 0
-    let hasMore = false
-
-    do {
-      const response = await fetch('/api/admin-compress-images', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-admin-key': adminKey
-        },
-        body: JSON.stringify({ limit: 5 })
-      })
-
-      const data = await response.json().catch(() => ({}))
-
-      if (!response.ok) {
-        handleError(data?.error || '圖片補救失敗。', data)
-        return
-      }
-
-      totalProcessedMemories += Number(data.processedMemories ?? 0)
-      totalCompressedImages += Number(data.compressedImages ?? 0)
-      totalFailedImages += Number(data.failedImages ?? 0)
-      hasMore = Boolean(data.hasMore)
-      loop += 1
-    } while (hasMore && loop < 20)
-
-    await fetchMemories()
-    statusMessage.value =
-      `補救完成：處理 ${totalProcessedMemories} 筆回憶、壓縮 ${totalCompressedImages} 張` +
-      `${totalFailedImages ? `，失敗 ${totalFailedImages} 張` : ''}。`
-  } finally {
-    runningImageRecovery.value = false
-  }
-}
 </script>
 
 <template>
@@ -605,15 +557,6 @@ async function runTemporaryImageRecovery() {
       @click="activePage === 'todos' ? openTodoComposer() : openMemoryComposer()"
     >
       +
-    </button>
-
-    <button
-      class="temp-admin-button"
-      type="button"
-      :disabled="runningImageRecovery"
-      @click="runTemporaryImageRecovery"
-    >
-      {{ runningImageRecovery ? '補救中...' : '補救圖片(暫時)' }}
     </button>
 
     <div v-if="composerOpen" class="composer-backdrop" @click.self="closeComposer">
