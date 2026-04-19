@@ -26,6 +26,7 @@ const errorMessage = ref('')
 const composerOpen = ref(false)
 const menuOpenId = ref(null)
 const detailMemory = ref(null)
+const pendingTodoToMove = ref(null)
 const UPLOAD_RETRY_ATTEMPTS = 3
 const UPLOAD_TIMEOUT_MS = 25000
 
@@ -90,6 +91,7 @@ function openMemoryComposer(memory = null) {
   menuOpenId.value = null
 
   if (memory) {
+    pendingTodoToMove.value = null
     memoryForm.id = memory.id
     memoryForm.title = memory.title ?? ''
     memoryForm.story = memory.story ?? ''
@@ -99,6 +101,7 @@ function openMemoryComposer(memory = null) {
     return
   }
 
+  pendingTodoToMove.value = null
   memoryForm.id = null
   memoryForm.title = ''
   memoryForm.story = ''
@@ -110,6 +113,7 @@ function openMemoryComposer(memory = null) {
 function closeComposer() {
   composerOpen.value = false
   memoryForm.id = null
+  pendingTodoToMove.value = null
 }
 
 function toggleMenu(memoryId) {
@@ -156,14 +160,19 @@ async function addTodo() {
   await fetchTodos()
 }
 
-async function completeTodo(todo) {
-  errorMessage.value = ''
+function moveTodoToMemory(todo) {
+  openMemoryComposer()
+  pendingTodoToMove.value = todo
+  memoryForm.title = todo.todo ?? ''
+  memoryForm.story = todo.note ?? ''
+}
 
+async function markTodoAsCompleted(todoId) {
   const response = await fetch('/api/todos', {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      id: todo.id,
+      id: todoId,
       completed: true
     })
   })
@@ -171,13 +180,8 @@ async function completeTodo(todo) {
   const data = await response.json().catch(() => ({}))
 
   if (!response.ok) {
-    handleError('完成代辦失敗。', data)
-    return
+    throw data
   }
-
-  statusMessage.value = '已放進回憶。'
-  activePage.value = 'memories'
-  await Promise.all([fetchTodos(), fetchMemories()])
 }
 
 async function saveMemory() {
@@ -210,7 +214,28 @@ async function saveMemory() {
     return
   }
 
+  const movingTodoId = !isEditingMemory.value ? pendingTodoToMove.value?.id : null
+  let moveFailed = false
+
+  if (movingTodoId) {
+    try {
+      await markTodoAsCompleted(movingTodoId)
+    } catch (moveError) {
+      moveFailed = true
+      console.error(moveError)
+      errorMessage.value = '回憶已儲存，但移動待辦失敗，請稍後重試。'
+    }
+  }
+
   closeComposer()
+
+  if (movingTodoId && !moveFailed) {
+    statusMessage.value = '已移動到回憶。'
+    activePage.value = 'memories'
+    await Promise.all([fetchTodos(), fetchMemories()])
+    return
+  }
+
   statusMessage.value = isEditingMemory.value ? '回憶已更新。' : '已新增回憶。'
   await fetchMemories()
 }
@@ -361,7 +386,7 @@ function formatDate(value) {
   <div class="app-shell">
     <header class="hero-strip">
       <div class="hero-title">
-        <h1>日常</h1>
+        <h1>戀愛日記</h1>
       </div>
       <nav class="page-switcher" aria-label="頁面切換">
         <button
@@ -399,10 +424,10 @@ function formatDate(value) {
           <button
             class="inline-action inline-action--complete"
             type="button"
-            title="點一下完成待辦"
-            @click="completeTodo(item)"
+            title="先編輯回憶再移動"
+            @click="moveTodoToMemory(item)"
           >
-            完成
+            移動到回憶
           </button>
         </article>
       </section>
@@ -486,7 +511,11 @@ function formatDate(value) {
 
         <form v-else class="composer-form" @submit.prevent="saveMemory">
           <input v-model="memoryForm.title" type="text" placeholder="回憶標題" />
-          <input v-model="memoryForm.memory_date" type="date" />
+          <label class="date-field">
+            <span class="date-label">活動日期（可選）</span>
+            <input v-model="memoryForm.memory_date" type="date" />
+            <small v-if="!memoryForm.memory_date" class="date-hint">點日期欄位可選擇日期</small>
+          </label>
           <textarea v-model="memoryForm.story" rows="5" placeholder="寫下來"></textarea>
 
           <label class="upload-box upload-box--sheet">

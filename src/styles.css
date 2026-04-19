@@ -426,6 +426,24 @@ img {
   gap: 12px;
 }
 
+.date-field {
+  display: grid;
+  gap: 6px;
+}
+
+.date-label,
+.date-hint {
+  color: var(--text-soft);
+}
+
+.date-label {
+  font-size: 0.88rem;
+}
+
+.date-hint {
+  font-size: 0.82rem;
+}
+
 .upload-box {
   display: grid;
   gap: 8px;
