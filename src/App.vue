@@ -459,7 +459,7 @@ function formatDate(value) {
   <div class="app-shell">
     <header class="hero-strip">
       <div class="hero-title">
-        <h1>和她一起的計畫與回憶</h1>
+        <h1>和她的計畫與回憶</h1>
       </div>
       <nav class="page-switcher" aria-label="頁面切換">
         <button
