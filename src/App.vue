@@ -17,7 +17,8 @@ const memoryForm = reactive({
 const activePage = ref('todos')
 const todos = ref([])
 const memories = ref([])
-const loading = ref(true)
+const todosLoading = ref(true)
+const memoriesLoading = ref(true)
 const submittingTodo = ref(false)
 const submittingMemory = ref(false)
 const uploadingImage = ref(false)
@@ -38,8 +39,19 @@ const pageTitle = computed(() => (activePage.value === 'todos' ? '待辦' : '回
 const isEditingMemory = computed(() => Boolean(memoryForm.id))
 
 onMounted(async () => {
-  await Promise.all([fetchTodos(), fetchMemories()])
-  loading.value = false
+  try {
+    await fetchTodos()
+  } finally {
+    todosLoading.value = false
+  }
+
+  fetchMemories()
+    .catch((error) => {
+      console.error(error)
+    })
+    .finally(() => {
+      memoriesLoading.value = false
+    })
 })
 
 async function fetchTodos() {
@@ -486,7 +498,7 @@ function formatDate(value) {
 
     <main class="content-surface">
       <section v-if="activePage === 'todos'" class="content-list">
-        <div v-if="loading" class="quiet-state">讀取中...</div>
+        <div v-if="todosLoading" class="quiet-state">讀取中...</div>
         <div v-else-if="!todos.length" class="quiet-state">還沒有待辦</div>
 
         <article v-for="item in todos" :key="item.id" class="story-card story-card--todo">
@@ -506,7 +518,7 @@ function formatDate(value) {
       </section>
 
       <section v-else class="content-list">
-        <div v-if="loading" class="quiet-state">讀取中...</div>
+        <div v-if="memoriesLoading" class="quiet-state">讀取中...</div>
         <div v-else-if="!memories.length" class="quiet-state">還沒有回憶</div>
 
         <article
