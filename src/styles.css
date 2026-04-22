@@ -1,11 +1,12 @@
-:root {
+﻿:root {
   --bg: #f4f0e8;
   --bg-soft: #ebe5db;
   --paper: rgba(255, 252, 247, 0.88);
   --paper-strong: rgba(255, 255, 255, 0.94);
   --line: rgba(74, 75, 65, 0.12);
   --text: #2f312c;
-  --text-soft: #6d6f66;
+  /* 微調對比度，讓次要文字在半透明背景上更清晰 */
+  --text-soft: #5a5c54; 
   --accent: #66725b;
   --accent-deep: #4f5947;
   --shadow: 0 16px 40px rgba(60, 58, 49, 0.08);
@@ -22,13 +23,15 @@ html {
 body {
   margin: 0;
   min-height: 100vh;
-  font-family: 'Segoe UI', 'PingFang TC', sans-serif;
+  /* 加上 system-ui 讓各平台字體渲染更滑順原生 */
+  font-family: system-ui, -apple-system, 'BlinkMacSystemFont', 'Segoe UI', 'PingFang TC', sans-serif;
   color: var(--text);
   background:
-    radial-gradient(circle at top left, rgba(255, 255, 255, 0.8), transparent 26%),
-    linear-gradient(180deg, var(--bg), var(--bg-soft));
+    linear-gradient(rgba(244, 240, 232, 0.48), rgba(235, 229, 219, 0.48)),
+    url('/IMG_5672.png') center / cover no-repeat fixed;
 }
 
+/* 確保互動元素繼承字體 */
 button,
 input,
 textarea {
@@ -39,11 +42,20 @@ button {
   transition:
     transform 160ms ease,
     background 160ms ease,
-    opacity 160ms ease;
+    opacity 160ms ease,
+    box-shadow 160ms ease;
 }
 
 button:hover {
   transform: translateY(-1px);
+}
+
+/* 無障礙焦點設計 (Tab 鍵導覽時顯示，滑鼠點擊不干擾) */
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 input,
@@ -55,11 +67,12 @@ textarea {
   color: var(--text);
   background: rgba(255, 255, 255, 0.82);
   outline: none;
+  transition: border-color 0.2s ease;
 }
 
 input:focus,
 textarea:focus {
-  border-color: rgba(79, 89, 71, 0.28);
+  border-color: rgba(79, 89, 71, 0.4);
 }
 
 textarea {
@@ -146,8 +159,135 @@ img {
   gap: 14px;
 }
 
+.calendar-view {
+  gap: 10px;
+}
+
+.calendar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.calendar-head h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.calendar-nav {
+  border: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: rgba(255, 252, 247, 0.9);
+  color: var(--text-soft);
+  cursor: pointer;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.calendar-weekday {
+  text-align: center;
+  font-size: 0.82rem;
+  color: var(--text-soft);
+}
+
+.calendar-day {
+  position: relative;
+  min-height: 54px;
+  border: 1px solid rgba(74, 75, 65, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.calendar-day--empty {
+  visibility: hidden;
+}
+
+.calendar-day--has-memory {
+  border-color: rgba(79, 89, 71, 0.28);
+  background: rgba(238, 245, 235, 0.82);
+}
+
+.calendar-day--selected {
+  border-color: var(--accent-deep);
+  box-shadow: 0 0 0 2px rgba(79, 89, 71, 0.2);
+}
+
+.calendar-day__num {
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  font-size: 0.85rem;
+}
+
+.calendar-day__dot {
+  position: absolute;
+  right: 10px;
+  bottom: 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--accent-deep);
+}
+
+.calendar-memory-panel {
+  margin-top: 8px;
+}
+
+.calendar-memory-panel h4 {
+  margin: 0 0 8px;
+  font-size: 0.96rem;
+}
+
+.calendar-memory-list {
+  display: grid;
+  gap: 8px;
+}
+
+.calendar-memory-item {
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(255, 252, 247, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.86);
+  cursor: pointer;
+}
+
+.calendar-memory-item h5 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.calendar-memory-item p {
+  margin: 6px 0 0;
+  font-size: 0.9rem;
+  color: var(--text-soft);
+}
+
+/* 升級版的空狀態 (Empty State) */
+.quiet-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 20px;
+  text-align: center;
+  border-radius: 22px;
+  background: var(--paper);
+  border: 2px dashed rgba(102, 114, 91, 0.15);
+  color: var(--text-soft);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
 .story-card,
-.quiet-state,
 .composer-sheet,
 .preview-card {
   background: var(--paper);
@@ -157,16 +297,16 @@ img {
   -webkit-backdrop-filter: blur(16px);
 }
 
-.quiet-state {
-  padding: 18px 20px;
-  border-radius: 22px;
-  color: var(--text-soft);
-}
-
 .story-card {
   overflow: hidden;
   border-radius: 26px;
   cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.story-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 48px rgba(60, 58, 49, 0.12);
 }
 
 .story-card__body {
@@ -196,6 +336,23 @@ img {
   display: inline-block;
   color: var(--text-soft);
   font-size: 0.88rem;
+}
+
+/* 專為「移動到回憶」設計的按鈕樣式 */
+.btn-move {
+  border: 0;
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 6px 14px;
+  border-radius: 16px;
+  background: rgba(102, 114, 91, 0.08);
+  color: var(--accent-deep);
+  font-weight: 500;
+  transition: background 0.2s ease;
+}
+
+.btn-move:hover {
+  background: rgba(102, 114, 91, 0.15);
 }
 
 .story-image {
@@ -320,34 +477,42 @@ img {
   position: relative;
 }
 
+/* 卡片右上角操作選單觸發按鈕 */
 .menu-trigger {
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   border: 0;
   border-radius: 999px;
   color: var(--text-soft);
-  background: rgba(242, 240, 233, 0.92);
+  background: transparent;
   cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.menu-trigger:hover {
+  background: rgba(102, 114, 91, 0.1);
+  color: var(--accent-deep);
 }
 
 .memory-menu {
   position: absolute;
   right: 0;
   top: calc(100% + 8px);
-  min-width: 90px;
+  min-width: 100px;
   display: grid;
-  padding: 4px;
+  padding: 6px;
   border-radius: 12px;
   background: rgba(255, 252, 247, 0.98);
   border: 1px solid rgba(255, 255, 255, 0.92);
-  box-shadow: 0 16px 34px rgba(60, 58, 49, 0.12);
+  box-shadow: 0 8px 24px rgba(60, 58, 49, 0.12);
   z-index: 4;
 }
 
 .memory-menu button {
   border: 0;
-  padding: 7px 9px;
-  font-size: 0.82rem;
+  padding: 8px 12px;
+  font-size: 0.88rem;
   text-align: left;
   color: var(--text);
   background: transparent;
@@ -356,7 +521,15 @@ img {
 }
 
 .memory-menu button:hover {
-  background: rgba(242, 240, 233, 0.86);
+  background: rgba(102, 114, 91, 0.08);
+  color: var(--accent-deep);
+}
+
+.memory-menu button.danger-text {
+  color: #c75c5c;
+}
+.memory-menu button.danger-text:hover {
+  background: rgba(199, 92, 92, 0.08);
 }
 
 .floating-add {
@@ -373,8 +546,12 @@ img {
   line-height: 1;
   color: #fff;
   background: linear-gradient(135deg, var(--accent), var(--accent-deep));
-  box-shadow: 0 16px 30px rgba(79, 89, 71, 0.22);
+  box-shadow: 0 12px 28px rgba(79, 89, 71, 0.25);
   cursor: pointer;
+}
+
+.floating-add:hover {
+  box-shadow: 0 16px 32px rgba(79, 89, 71, 0.35);
 }
 
 .composer-backdrop {
@@ -384,6 +561,7 @@ img {
   align-items: end;
   background: rgba(38, 39, 35, 0.2);
   padding: 14px;
+  backdrop-filter: blur(4px); /* 新增背景微模糊 */
 }
 
 .composer-sheet {
@@ -421,6 +599,10 @@ img {
   color: var(--text-soft);
 }
 
+.close-button:hover {
+  background: rgba(230, 227, 218, 1);
+}
+
 .composer-form {
   display: grid;
   gap: 12px;
@@ -447,10 +629,18 @@ img {
 .upload-box {
   display: grid;
   gap: 8px;
-  padding: 14px;
-  border: 1px dashed rgba(79, 89, 71, 0.18);
+  padding: 20px;
+  border: 1.5px dashed rgba(79, 89, 71, 0.25);
   border-radius: 18px;
-  background: rgba(246, 243, 237, 0.92);
+  background: rgba(246, 243, 237, 0.5);
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.upload-box:hover {
+  background: rgba(246, 243, 237, 0.9);
+  border-color: var(--accent);
 }
 
 .upload-box small {
@@ -502,11 +692,15 @@ img {
   cursor: pointer;
 }
 
+.preview-remove:hover {
+  background: rgba(220, 80, 80, 0.85);
+}
+
 .composer-actions {
   position: sticky;
   bottom: 0;
-  padding-top: 8px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.92) 28%);
+  padding-top: 16px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.95) 28%);
 }
 
 .detail-date {
@@ -538,13 +732,23 @@ img {
 
 .primary-button {
   justify-self: start;
-  padding: 12px 18px;
+  padding: 12px 24px;
   border-radius: 999px;
   color: #fff;
   background: var(--accent-deep);
+  font-weight: 500;
+  box-shadow: 0 4px 12px rgba(79, 89, 71, 0.2);
+}
+
+.primary-button:hover {
+  background: #3e4638;
 }
 
 @media (max-width: 720px) {
+  body {
+    background-attachment: scroll;
+  }
+
   .app-shell {
     width: min(100% - 18px, 820px);
     padding-top: 18px;

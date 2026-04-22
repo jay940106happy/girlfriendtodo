@@ -30,6 +30,9 @@ const composerOpen = ref(false)
 const menuOpenId = ref(null)
 const detailMemory = ref(null)
 const pendingTodoToMove = ref(null)
+const todosFetchDone = ref(false)
+const memoriesFetchDone = ref(false)
+const demoDataApplied = ref(false)
 const UPLOAD_RETRY_ATTEMPTS = 3
 const UPLOAD_TIMEOUT_MS = 25000
 const UPLOAD_MAX_DIMENSION = 1920
@@ -39,6 +42,65 @@ const UPLOAD_MIN_QUALITY = 0.6
 const totalMemoryCount = computed(() => memories.value.length)
 const pageTitle = computed(() => (activePage.value === 'todos' ? '待辦' : '回憶'))
 const isEditingMemory = computed(() => Boolean(memoryForm.id))
+const calendarMonth = ref(new Date().toISOString().slice(0, 7))
+const selectedCalendarDate = ref('')
+const weekdayLabels = ['一', '二', '三', '四', '五', '六', '日']
+const memoriesByDate = computed(() => {
+  const map = new Map()
+
+  for (const memory of memories.value) {
+    if (!memory.memory_date) continue
+    const key = String(memory.memory_date).slice(0, 10)
+    if (!map.has(key)) {
+      map.set(key, [])
+    }
+    map.get(key).push(memory)
+  }
+
+  return map
+})
+const calendarDays = computed(() => {
+  const [year, month] = calendarMonth.value.split('-').map(Number)
+  if (!year || !month) return []
+
+  const firstDate = new Date(year, month - 1, 1)
+  const firstWeekday = (firstDate.getDay() + 6) % 7
+  const daysInMonth = new Date(year, month, 0).getDate
+  const cells = []
+
+  for (let i = 0; i < firstWeekday; i += 1) {
+    cells.push(null)
+  }
+
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const date = `${year}-${pad2(month)}-${pad2(day)}`
+    const dayMemories = memoriesByDate.value.get(date) ?? []
+    cells.push({
+      date,
+      day,
+      memoryCount: dayMemories.length
+    })
+  }
+
+  while (cells.length % 7 !== 0) {
+    cells.push(null)
+  }
+
+  return cells
+})
+const selectedCalendarMemories = computed(() => {
+  if (!selectedCalendarDate.value) return []
+  return memoriesByDate.value.get(selectedCalendarDate.value) ?? []
+})
+const calendarMonthLabel = computed(() => {
+  const [year, month] = calendarMonth.value.split('-').map(Number)
+  if (!year || !month) return ''
+
+  return new Intl.DateTimeFormat('zh-TW', {
+    year: 'numeric',
+    month: 'long'
+  }).format(new Date(year, month - 1, 1))
+})
 
 onMounted(async () => {
   fetchTodos()
@@ -47,6 +109,8 @@ onMounted(async () => {
     })
     .finally(() => {
       todosLoading.value = false
+      todosFetchDone.value = true
+      maybeApplyDemoData()
     })
 
   fetchMemories()
@@ -55,6 +119,8 @@ onMounted(async () => {
     })
     .finally(() => {
       memoriesLoading.value = false
+      memoriesFetchDone.value = true
+      maybeApplyDemoData()
     })
 })
 
@@ -241,9 +307,11 @@ async function saveMemory() {
   }
 
   const movingTodoId = !isEditingMemory.value ? pendingTodoToMove.value?.id : null
+  const shouldMarkTodoCompleted =
+    !isEditingMemory.value && pendingTodoToMove.value && !pendingTodoToMove.value.is_demo
   let moveFailed = false
 
-  if (movingTodoId) {
+  if (shouldMarkTodoCompleted && movingTodoId) {
     try {
       await markTodoAsCompleted(movingTodoId)
     } catch (moveError) {
@@ -255,7 +323,7 @@ async function saveMemory() {
 
   closeComposer()
 
-  if (movingTodoId && !moveFailed) {
+  if (shouldMarkTodoCompleted && movingTodoId && !moveFailed) {
     statusMessage.value = '已移動到回憶。'
     activePage.value = 'memories'
     await Promise.all([fetchTodos(), fetchMemories()])
@@ -473,6 +541,21 @@ function formatDate(value) {
   }).format(new Date(value))
 }
 
+function pad2(value) {
+  return String(value).padStart(2, '0')
+}
+
+function shiftCalendarMonth(offset) {
+  const [year, month] = calendarMonth.value.split('-').map(Number)
+  const next = new Date(year, month - 1 + offset, 1)
+  calendarMonth.value = `${next.getFullYear()}-${pad2(next.getMonth() + 1)}`
+  selectedCalendarDate.value = ''
+}
+
+function selectCalendarDate(date) {
+  selectedCalendarDate.value = date
+}
+
 function readTodoCache() {
   try {
     const raw = localStorage.getItem(TODO_CACHE_KEY)
@@ -482,6 +565,55 @@ function readTodoCache() {
   } catch {
     return []
   }
+}
+
+function maybeApplyDemoData() {
+  if (demoDataApplied.value) return
+  if (!todosFetchDone.value || !memoriesFetchDone.value) return
+  if (todos.value.length || memories.value.length) return
+
+  todos.value = [
+    {
+      id: 'demo-todo-1',
+      todo: '一起去看海邊日落',
+      note: '帶野餐墊和保溫瓶',
+      due_date: '2026-05-03',
+      is_demo: true
+    },
+    {
+      id: 'demo-todo-2',
+      todo: '挑一間新咖啡店約會',
+      note: '拍一張店門口合照',
+      due_date: null,
+      is_demo: true
+    }
+  ]
+
+  memories.value = [
+    {
+      id: 'demo-memory-1',
+      title: '第一次一起騎車夜遊',
+      story: '從河堤一路騎到橋邊，風很涼，聊到不想回家。',
+      memory_date: '2026-03-30',
+      image_urls: [
+        'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80',
+        'https://images.unsplash.com/photo-1516589178581-6cd7833ae3b2?auto=format&fit=crop&w=1200&q=80'
+      ]
+    },
+    {
+      id: 'demo-memory-2',
+      title: '雨天散步的小旅行',
+      story: '原本怕下雨，結果走在傘下更浪漫。',
+      memory_date: '2026-02-14',
+      image_urls: [
+        'https://images.unsplash.com/photo-1472396961693-142e6e269027?auto=format&fit=crop&w=1200&q=80'
+      ]
+    }
+  ]
+
+  demoDataApplied.value = true
+  statusMessage.value = '目前顯示範例資料（因為尚未有待辦與回憶）。'
+  errorMessage.value = ''
 }
 
 function writeTodoCache(nextTodos) {
@@ -517,6 +649,14 @@ function writeTodoCache(nextTodos) {
         >
           回憶 {{ totalMemoryCount }}
         </button>
+        <button
+          class="switch-button"
+          :class="{ active: activePage === 'calendar' }"
+          type="button"
+          @click="activePage = 'calendar'"
+        >
+          月曆
+        </button>
       </nav>
     </header>
 
@@ -547,7 +687,7 @@ function writeTodoCache(nextTodos) {
         </article>
       </section>
 
-      <section v-else class="content-list">
+      <section v-else-if="activePage === 'memories'" class="content-list">
         <div v-if="memoriesLoading" class="quiet-state">讀取中...</div>
         <div v-else-if="!memories.length" class="quiet-state">還沒有回憶</div>
 
@@ -589,6 +729,53 @@ function writeTodoCache(nextTodos) {
             <p class="memory-excerpt">{{ memory.story || ' ' }}</p>
           </div>
         </article>
+      </section>
+
+      <section v-else class="content-list calendar-view">
+        <div class="calendar-head">
+          <button class="calendar-nav" type="button" @click="shiftCalendarMonth(-1)">‹</button>
+          <h3>{{ calendarMonthLabel }}</h3>
+          <button class="calendar-nav" type="button" @click="shiftCalendarMonth(1)">›</button>
+        </div>
+
+        <div class="calendar-grid calendar-grid--weekday">
+          <div v-for="label in weekdayLabels" :key="label" class="calendar-weekday">{{ label }}</div>
+        </div>
+
+        <div class="calendar-grid calendar-grid--days">
+          <button
+            v-for="(dayCell, index) in calendarDays"
+            :key="dayCell ? dayCell.date : `empty-${index}`"
+            class="calendar-day"
+            :class="{
+              'calendar-day--empty': !dayCell,
+              'calendar-day--has-memory': dayCell && dayCell.memoryCount > 0,
+              'calendar-day--selected': dayCell && dayCell.date === selectedCalendarDate
+            }"
+            type="button"
+            :disabled="!dayCell"
+            @click="dayCell && selectCalendarDate(dayCell.date)"
+          >
+            <span v-if="dayCell" class="calendar-day__num">{{ dayCell.day }}</span>
+            <span v-if="dayCell && dayCell.memoryCount > 0" class="calendar-day__dot"></span>
+          </button>
+        </div>
+
+        <div v-if="selectedCalendarDate" class="calendar-memory-panel">
+          <h4>回憶：{{ formatDate(selectedCalendarDate) }}</h4>
+          <div v-if="selectedCalendarMemories.length" class="calendar-memory-list">
+            <article
+              v-for="memory in selectedCalendarMemories"
+              :key="`calendar-${memory.id}`"
+              class="calendar-memory-item"
+              @click="openMemoryDetail(memory)"
+            >
+              <h5>{{ memory.title }}</h5>
+              <p>{{ memory.story || ' ' }}</p>
+            </article>
+          </div>
+          <p v-else class="quiet-state">這天還沒有回憶</p>
+        </div>
       </section>
     </main>
 
