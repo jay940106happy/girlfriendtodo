@@ -1027,7 +1027,12 @@ function writeTodoCache(nextTodos) {
         <div v-if="todosLoading" class="quiet-state">讀取中...</div>
         <div v-else-if="!todos.length" class="quiet-state">還沒有待辦</div>
 
-        <article v-for="item in todos" :key="item.id" class="story-card story-card--todo">
+        <article
+          v-for="item in todos"
+          :key="item.id"
+          class="story-card story-card--todo"
+          :class="{ 'story-card--menu-open': menuOpenId === `todo-${item.id}` }"
+        >
           <div class="story-card__body">
             <div class="story-meta story-meta--top">
               <span>預計：{{ item.due_date ? formatDate(item.due_date) : '未決定' }}</span>
@@ -1064,6 +1069,7 @@ function writeTodoCache(nextTodos) {
           v-for="memory in memories"
           :key="memory.id"
           class="story-card story-card--memory"
+          :class="{ 'story-card--menu-open': menuOpenId === `memory-${memory.id}` }"
           @click="openMemoryDetail(memory)"
         >
           <div v-if="memory.image_urls.length" class="story-cover story-cover--grid">

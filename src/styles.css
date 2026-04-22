@@ -421,6 +421,11 @@ img {
   border-radius: 26px;
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
+  z-index: 1;
+}
+
+.story-card--menu-open {
+  z-index: 90;
 }
 
 .story-card:hover {
