@@ -661,6 +661,7 @@ img {
   position: fixed;
   right: 28px;
   bottom: 26px;
+  z-index: 180;
   width: 56px;
   height: 56px;
   display: grid;
