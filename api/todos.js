@@ -5,6 +5,10 @@ let todoSchemaEnsured = false
 async function ensureTodoSchema() {
   if (todoSchemaEnsured) return
   await sql`alter table todo add column if not exists due_date date`
+  await sql`
+    create index if not exists idx_todo_completed_due_created
+    on todo (completed, due_date, created_at desc)
+  `
   todoSchemaEnsured = true
 }
 

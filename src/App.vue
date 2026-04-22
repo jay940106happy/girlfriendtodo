@@ -1,5 +1,5 @@
 ﻿<script setup>
-import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 
 const todoForm = reactive({
   todo: '',
@@ -36,6 +36,7 @@ const memoriesFetchDone = ref(false)
 const demoDataApplied = ref(false)
 const UPLOAD_RETRY_ATTEMPTS = 3
 const UPLOAD_TIMEOUT_MS = 25000
+const MEMORY_FETCH_DEFER_MS = 900
 const UPLOAD_MAX_DIMENSION = 1920
 const UPLOAD_TARGET_BYTES = 1200 * 1024
 const UPLOAD_MIN_QUALITY = 0.6
@@ -66,8 +67,10 @@ const celebrationActive = ref(false)
 const celebrationTitle = ref('')
 const celebrationSubtitle = ref('')
 const fireflyParticles = ref([])
+const memoriesFetchStarted = ref(false)
 const weekdayLabels = ['一', '二', '三', '四', '五', '六', '日']
 let celebrationTimerId = null
+let deferredMemoriesTimerId = null
 const memoriesByDate = computed(() => {
   const map = new Map()
 
@@ -153,20 +156,23 @@ onMounted(async () => {
       maybeApplyDemoData()
     })
 
-  fetchMemories()
-    .catch((error) => {
-      console.error(error)
-    })
-    .finally(() => {
-      memoriesLoading.value = false
-      memoriesFetchDone.value = true
-      maybeApplyDemoData()
-    })
+  deferredMemoriesTimerId = setTimeout(() => {
+    startMemoriesFetch()
+  }, MEMORY_FETCH_DEFER_MS)
 })
 
 onUnmounted(() => {
   if (celebrationTimerId) {
     clearTimeout(celebrationTimerId)
+  }
+  if (deferredMemoriesTimerId) {
+    clearTimeout(deferredMemoriesTimerId)
+  }
+})
+
+watch(activePage, (nextPage) => {
+  if (nextPage === 'memories' || nextPage === 'calendar') {
+    startMemoriesFetch()
   }
 })
 
@@ -193,6 +199,22 @@ async function fetchMemories() {
   }
 
   memories.value = (data ?? []).map(normalizeMemory)
+}
+
+function startMemoriesFetch() {
+  if (memoriesFetchStarted.value) return
+  memoriesFetchStarted.value = true
+  memoriesLoading.value = true
+
+  fetchMemories()
+    .catch((error) => {
+      console.error(error)
+    })
+    .finally(() => {
+      memoriesLoading.value = false
+      memoriesFetchDone.value = true
+      maybeApplyDemoData()
+    })
 }
 
 function normalizeMemory(memory) {
