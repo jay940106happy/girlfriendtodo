@@ -416,7 +416,8 @@ img {
 }
 
 .story-card {
-  overflow: hidden;
+  position: relative;
+  overflow: visible;
   border-radius: 26px;
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
@@ -593,6 +594,7 @@ img {
 
 .memory-menu-wrap {
   position: relative;
+  z-index: 20;
 }
 
 /* 卡片右上角操作選單觸發按鈕 */
@@ -624,7 +626,7 @@ img {
   background: rgba(255, 252, 247, 0.98);
   border: 1px solid rgba(255, 255, 255, 0.92);
   box-shadow: 0 8px 24px rgba(60, 58, 49, 0.12);
-  z-index: 4;
+  z-index: 40;
 }
 
 .memory-menu button {
