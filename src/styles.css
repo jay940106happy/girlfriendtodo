@@ -990,17 +990,16 @@ body {
 
 .firefly-dot {
   position: absolute;
-  bottom: -12px;
   border-radius: 999px;
   background: radial-gradient(circle, rgba(255, 255, 243, 0.95), rgba(255, 227, 163, 0.72));
   box-shadow:
     0 0 12px rgba(255, 242, 186, 0.85),
     0 0 26px rgba(255, 226, 145, 0.6),
     0 0 44px rgba(255, 198, 130, 0.32);
-  animation-name: fireflyRise, fireflyTwinkle;
-  animation-timing-function: cubic-bezier(0.23, 0.59, 0.25, 1), ease-in-out;
-  animation-iteration-count: infinite, infinite;
-  animation-duration: 9s, var(--twinkle-duration);
+  animation:
+    fireflyFloat var(--float-duration) var(--float-delay) ease-in-out infinite alternate,
+    fireflyTwinkle var(--twinkle-duration) ease-in-out infinite;
+  will-change: transform, opacity, filter;
 }
 
 .celebration-banner {
@@ -1036,17 +1035,26 @@ body {
   color: #7a5668;
 }
 
-@keyframes fireflyRise {
+@keyframes fireflyFloat {
   0% {
-    transform: translate3d(0, 0, 0) scale(0.9);
-    opacity: 0;
+    transform: translate3d(0, 0, 0) scale(0.92);
+    opacity: 0.65;
   }
-  18% {
-    opacity: 1;
+  33% {
+    transform: translate3d(var(--move-x1), var(--move-y1), 0) scale(1.06);
+    opacity: 0.95;
+  }
+  66% {
+    transform: translate3d(
+      calc(var(--move-x1) * -0.45),
+      calc(var(--move-y1) * -0.45),
+      0
+    ) scale(1);
+    opacity: 0.78;
   }
   100% {
-    transform: translate3d(var(--drift-x), -106vh, 0) scale(1.08);
-    opacity: 0;
+    transform: translate3d(var(--move-x2), var(--move-y2), 0) scale(1.1);
+    opacity: 0.92;
   }
 }
 

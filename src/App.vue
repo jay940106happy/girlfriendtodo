@@ -376,20 +376,28 @@ function triggerCelebration(title, subtitle) {
 function generateFireflyParticles(count) {
   return Array.from({ length: count }, (_, index) => {
     const size = 6 + Math.random() * 11
-    const duration = 6.8 + Math.random() * 5.4
-    const delay = Math.random() * 2.4
+    const duration = `${4.8 + Math.random() * 4.6}s`
+    const delay = `${Math.random() * 1.5}s`
+    const top = `${Math.random() * 100}%`
     const left = Math.random() * 100
-    const drift = -56 + Math.random() * 112
-    const twinkle = 1 + Math.random() * 1.8
+    const moveX1 = `${-24 + Math.random() * 48}px`
+    const moveY1 = `${-24 + Math.random() * 48}px`
+    const moveX2 = `${-40 + Math.random() * 80}px`
+    const moveY2 = `${-40 + Math.random() * 80}px`
+    const twinkle = `${0.9 + Math.random() * 1.6}s`
 
     return {
       id: `f-${index}-${Date.now()}`,
       size: `${size}px`,
+      top,
       left: `${left}%`,
-      drift: `${drift}px`,
-      duration: `${duration}s`,
-      delay: `${delay}s`,
-      twinkle: `${twinkle}s`
+      duration,
+      delay,
+      moveX1,
+      moveY1,
+      moveX2,
+      moveY2,
+      twinkle
     }
   })
 }
@@ -890,12 +898,16 @@ function writeTodoCache(nextTodos) {
         :key="particle.id"
         class="firefly-dot"
         :style="{
+          top: particle.top,
           left: particle.left,
           width: particle.size,
           height: particle.size,
-          animationDuration: particle.duration,
-          animationDelay: particle.delay,
-          '--drift-x': particle.drift,
+          '--float-duration': particle.duration,
+          '--float-delay': particle.delay,
+          '--move-x1': particle.moveX1,
+          '--move-y1': particle.moveY1,
+          '--move-x2': particle.moveX2,
+          '--move-y2': particle.moveY2,
           '--twinkle-duration': particle.twinkle
         }"
       />
