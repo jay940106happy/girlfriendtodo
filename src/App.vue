@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 
 const todoForm = reactive({
+  id: null,
   todo: '',
   note: '',
   due_date: ''
@@ -61,6 +62,7 @@ const VALENTINE_EVENTS = [
 const totalMemoryCount = computed(() => memories.value.length)
 const pageTitle = computed(() => (activePage.value === 'todos' ? '待辦' : '回憶'))
 const isEditingMemory = computed(() => Boolean(memoryForm.id))
+const isEditingTodo = computed(() => Boolean(todoForm.id))
 const calendarMonth = ref(getTodayISOInTaipei().slice(0, 7))
 const selectedCalendarDate = ref(getTodayISOInTaipei())
 const celebrationActive = ref(false)
@@ -438,11 +440,13 @@ function getTodayISOInTaipei() {
   return `${year}-${month}-${day}`
 }
 
-function openTodoComposer() {
+function openTodoComposer(todo = null) {
   composerOpen.value = true
-  todoForm.todo = ''
-  todoForm.note = ''
-  todoForm.due_date = ''
+  menuOpenId.value = null
+  todoForm.id = todo?.id ?? null
+  todoForm.todo = todo?.todo ?? ''
+  todoForm.note = todo?.note ?? ''
+  todoForm.due_date = todo?.due_date ?? ''
   statusMessage.value = ''
   errorMessage.value = ''
 }
@@ -475,6 +479,7 @@ function openMemoryComposer(memory = null) {
 
 function closeComposer() {
   composerOpen.value = false
+  todoForm.id = null
   memoryForm.id = null
   pendingTodoToMove.value = null
 }
@@ -501,26 +506,28 @@ async function addTodo() {
   submittingTodo.value = true
   errorMessage.value = ''
 
+  const payload = {
+    todo: todoForm.todo.trim(),
+    note: todoForm.note.trim() || null,
+    due_date: todoForm.due_date || null
+  }
+
   const response = await fetch('/api/todos', {
-    method: 'POST',
+    method: isEditingTodo.value ? 'PATCH' : 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      todo: todoForm.todo.trim(),
-      note: todoForm.note.trim() || null,
-      due_date: todoForm.due_date || null
-    })
+    body: JSON.stringify(isEditingTodo.value ? { id: todoForm.id, ...payload } : payload)
   })
 
   const data = await response.json().catch(() => ({}))
   submittingTodo.value = false
 
   if (!response.ok) {
-    handleError('新增代辦失敗。', data)
+    handleError(isEditingTodo.value ? '更新待辦失敗。' : '新增代辦失敗。', data)
     return
   }
 
   closeComposer()
-  statusMessage.value = '已加入新的待辦。'
+  statusMessage.value = isEditingTodo.value ? '待辦已更新。' : '已加入新的待辦。'
   await fetchTodos()
 }
 
@@ -798,6 +805,32 @@ function getHiddenImageCount(memory) {
   return Math.max(0, (memory.image_urls?.length ?? 0) - 4)
 }
 
+async function removeTodo(todo) {
+  if (!window.confirm(`確定要刪除待辦「${todo.todo}」嗎？`)) {
+    return
+  }
+
+  const response = await fetch('/api/todos', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: todo.id })
+  })
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}))
+    handleError('刪除待辦失敗。', data)
+    return
+  }
+
+  if (todoForm.id === todo.id) {
+    closeComposer()
+  }
+
+  menuOpenId.value = null
+  statusMessage.value = '待辦已刪除。'
+  await fetchTodos()
+}
+
 function getCalendarDetailImages(item) {
   if (item.type !== 'memory') return []
   const images = item.memory?.image_urls ?? []
@@ -996,20 +1029,30 @@ function writeTodoCache(nextTodos) {
 
         <article v-for="item in todos" :key="item.id" class="story-card story-card--todo">
           <div class="story-card__body">
-            <div class="story-meta">
+            <div class="story-meta story-meta--top">
               <span>預計：{{ item.due_date ? formatDate(item.due_date) : '未決定' }}</span>
+              <div class="memory-menu-wrap" @click.stop>
+                <button class="menu-trigger" type="button" @click="toggleMenu(`todo-${item.id}`)">•••</button>
+                <div v-if="menuOpenId === `todo-${item.id}`" class="memory-menu">
+                  <button
+                    type="button"
+                    @click="openTodoComposer(item), (menuOpenId = null)"
+                  >
+                    編輯
+                  </button>
+                  <button
+                    type="button"
+                    @click="moveTodoToMemory(item), (menuOpenId = null)"
+                  >
+                    移動到回憶
+                  </button>
+                  <button type="button" @click="removeTodo(item)">刪除</button>
+                </div>
+              </div>
             </div>
             <h3>{{ item.todo }}</h3>
             <p v-if="item.note">{{ item.note }}</p>
           </div>
-          <button
-            class="inline-action inline-action--complete"
-            type="button"
-            title="先編輯回憶再移動"
-            @click="moveTodoToMemory(item)"
-          >
-            移動到回憶
-          </button>
         </article>
       </section>
 
@@ -1039,8 +1082,8 @@ function writeTodoCache(nextTodos) {
             <div class="story-meta story-meta--top">
               <span v-if="memory.memory_date">{{ formatDate(memory.memory_date) }}</span>
               <div class="memory-menu-wrap" @click.stop>
-                <button class="menu-trigger" type="button" @click="toggleMenu(memory.id)">•••</button>
-                <div v-if="menuOpenId === memory.id" class="memory-menu">
+                <button class="menu-trigger" type="button" @click="toggleMenu(`memory-${memory.id}`)">•••</button>
+                <div v-if="menuOpenId === `memory-${memory.id}`" class="memory-menu">
                   <button
                     type="button"
                     @click="openMemoryComposer(memory), (menuOpenId = null)"
@@ -1149,7 +1192,9 @@ function writeTodoCache(nextTodos) {
           <h2>
             {{
               activePage === 'todos'
-                ? '新增待辦'
+                ? isEditingTodo
+                  ? '編輯待辦'
+                  : '新增待辦'
                 : isEditingMemory
                   ? '編輯回憶'
                   : '新增回憶'
