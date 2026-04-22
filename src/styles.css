@@ -684,6 +684,7 @@ img {
   inset: 0;
   display: grid;
   align-items: end;
+  z-index: 220;
   background: rgba(38, 39, 35, 0.2);
   padding: 14px;
   backdrop-filter: blur(4px); /* 新增背景微模糊 */
