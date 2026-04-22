@@ -346,11 +346,10 @@ img {
   border-radius: 14px;
   background: rgba(255, 252, 247, 0.88);
   border: 1px solid rgba(255, 255, 255, 0.86);
-  cursor: pointer;
 }
 
 .calendar-memory-item h5 {
-  margin: 0;
+  margin: 0 0 4px;
   font-size: 1rem;
 }
 
@@ -358,6 +357,36 @@ img {
   margin: 6px 0 0;
   font-size: 0.9rem;
   color: var(--text-soft);
+}
+
+.calendar-memory-item__type {
+  margin: 0;
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  color: var(--accent-deep);
+  background: rgba(217, 125, 167, 0.14);
+}
+
+.calendar-memory-item__gallery {
+  margin-top: 10px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.calendar-memory-item__gallery img {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: 12px;
+}
+
+@media (max-width: 720px) {
+  .calendar-memory-item__gallery {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 /* 升級版的空狀態 (Empty State) */

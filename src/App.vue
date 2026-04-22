@@ -776,6 +776,20 @@ function getHiddenImageCount(memory) {
   return Math.max(0, (memory.image_urls?.length ?? 0) - 4)
 }
 
+function getCalendarDetailImages(item) {
+  if (item.type !== 'memory') return []
+  const images = item.memory?.image_urls ?? []
+  return images.slice(0, 6)
+}
+
+function getCalendarItemTypeLabel(itemType) {
+  if (itemType === 'anniversary') return '紀念日'
+  if (itemType === 'festival') return '情人節'
+  if (itemType === 'birthday') return '生日'
+  if (itemType === 'todo') return '待辦'
+  return '回憶'
+}
+
 function handleError(message, error) {
   statusMessage.value = ''
   errorMessage.value = message
@@ -1069,23 +1083,28 @@ function writeTodoCache(nextTodos) {
         </div>
 
         <div v-if="selectedCalendarDate" class="calendar-memory-panel">
-          <h4>行程：{{ formatDate(selectedCalendarDate) }}</h4>
+          <h4>當日詳情：{{ formatDate(selectedCalendarDate) }}</h4>
           <div v-if="selectedCalendarItems.length" class="calendar-memory-list">
             <article
               v-for="(item, index) in selectedCalendarItems"
               :key="`calendar-item-${selectedCalendarDate}-${index}-${item.title}`"
               class="calendar-memory-item"
-              @click="item.type === 'memory' ? openMemoryDetail(item.memory) : null"
+              :class="{ 'calendar-memory-item--memory': item.type === 'memory' }"
             >
-              <h5>
-                <span v-if="item.type === 'anniversary'">紀念日｜</span>
-                <span v-else-if="item.type === 'festival'">情人節｜</span>
-                <span v-else-if="item.type === 'birthday'">生日｜</span>
-                <span v-else-if="item.type === 'todo'">待辦｜</span>
-                <span v-else>回憶｜</span>
-                {{ item.title }}
-              </h5>
+              <p class="calendar-memory-item__type">{{ getCalendarItemTypeLabel(item.type) }}</p>
+              <h5>{{ item.title }}</h5>
               <p>{{ item.story || ' ' }}</p>
+              <div
+                v-if="item.type === 'memory' && getCalendarDetailImages(item).length"
+                class="calendar-memory-item__gallery"
+              >
+                <img
+                  v-for="(image, imageIndex) in getCalendarDetailImages(item)"
+                  :key="`calendar-detail-${selectedCalendarDate}-${index}-${imageIndex}`"
+                  :src="image"
+                  :alt="item.title"
+                />
+              </div>
             </article>
           </div>
           <p v-else class="quiet-state">這天沒有事件</p>
