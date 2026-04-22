@@ -163,6 +163,40 @@ img {
   gap: 10px;
 }
 
+.calendar-legend {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.calendar-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.76rem;
+  border: 1px solid transparent;
+}
+
+.calendar-chip--festival {
+  color: #6a3e49;
+  background: rgba(241, 212, 220, 0.8);
+  border-color: rgba(211, 159, 175, 0.55);
+}
+
+.calendar-chip--todo {
+  color: #5a4c26;
+  background: rgba(247, 232, 186, 0.84);
+  border-color: rgba(223, 192, 109, 0.55);
+}
+
+.calendar-chip--memory {
+  color: #31544c;
+  background: rgba(203, 234, 223, 0.82);
+  border-color: rgba(146, 191, 176, 0.56);
+}
+
 .calendar-head {
   display: flex;
   align-items: center;
@@ -188,31 +222,47 @@ img {
 .calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 8px;
+  gap: 0;
+  border: 1px solid rgba(74, 75, 65, 0.14);
+  border-radius: 14px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.56);
 }
 
 .calendar-weekday {
   text-align: center;
   font-size: 0.82rem;
   color: var(--text-soft);
+  padding: 8px 0;
+  border-right: 1px solid rgba(74, 75, 65, 0.12);
+  border-bottom: 1px solid rgba(74, 75, 65, 0.12);
+  background: rgba(255, 255, 255, 0.74);
+}
+
+.calendar-weekday:nth-child(7n) {
+  border-right: 0;
 }
 
 .calendar-day {
   position: relative;
-  min-height: 54px;
-  border: 1px solid rgba(74, 75, 65, 0.1);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.72);
+  min-height: 118px;
+  padding: 26px 8px 8px;
+  border: 0;
+  border-right: 1px solid rgba(74, 75, 65, 0.12);
+  border-bottom: 1px solid rgba(74, 75, 65, 0.12);
+  border-radius: 0;
+  background: rgba(255, 255, 255, 0.68);
   color: var(--text);
   cursor: pointer;
+  text-align: left;
 }
 
-.calendar-day--empty {
-  visibility: hidden;
+.calendar-day--outside {
+  opacity: 0.55;
+  background: rgba(255, 255, 255, 0.46);
 }
 
 .calendar-day--has-memory {
-  border-color: rgba(79, 89, 71, 0.28);
   background: rgba(238, 245, 235, 0.82);
 }
 
@@ -226,16 +276,55 @@ img {
   top: 8px;
   left: 10px;
   font-size: 0.85rem;
+  font-weight: 600;
 }
 
-.calendar-day__dot {
-  position: absolute;
-  right: 10px;
-  bottom: 8px;
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: var(--accent-deep);
+.calendar-day__events {
+  display: grid;
+  gap: 4px;
+}
+
+.calendar-day__event-title {
+  margin: 0;
+  padding: 3px 6px;
+  border-radius: 7px;
+  font-size: 0.72rem;
+  line-height: 1.2;
+  color: var(--accent-deep);
+  background: rgba(79, 89, 71, 0.1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.calendar-day__event-title--festival,
+.calendar-day__event-title--anniversary {
+  color: #6a3e49;
+  background: rgba(241, 212, 220, 0.82);
+}
+
+.calendar-day__event-title--todo {
+  color: #5a4c26;
+  background: rgba(247, 232, 186, 0.86);
+}
+
+.calendar-day__event-title--memory {
+  color: #31544c;
+  background: rgba(203, 234, 223, 0.84);
+}
+
+.calendar-day__event-more {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--text-soft);
+}
+
+.calendar-grid--days .calendar-day:nth-child(7n) {
+  border-right: 0;
+}
+
+.calendar-grid--days .calendar-day:nth-last-child(-n + 7) {
+  border-bottom: 0;
 }
 
 .calendar-memory-panel {
@@ -787,5 +876,174 @@ img {
 
   .story-cover .story-image {
     aspect-ratio: 4 / 3;
+  }
+}
+
+/* Romantic celebration theme overrides */
+body {
+  color: #4c3341;
+  background:
+    radial-gradient(circle at 15% 20%, rgba(255, 240, 249, 0.68), transparent 36%),
+    radial-gradient(circle at 82% 14%, rgba(255, 229, 241, 0.58), transparent 34%),
+    linear-gradient(rgba(246, 228, 238, 0.56), rgba(246, 233, 240, 0.54)),
+    url('/IMG_5672.png') center / cover no-repeat fixed;
+}
+
+.app-shell {
+  position: relative;
+  transition: filter 680ms ease, transform 680ms ease;
+}
+
+.app-shell--celebration {
+  filter: saturate(1.2) brightness(1.08) contrast(1.04);
+  animation: celebrationPulse 3.2s ease-in-out infinite alternate;
+}
+
+.story-card,
+.composer-sheet,
+.preview-card,
+.page-switcher,
+.calendar-grid,
+.calendar-memory-item,
+.composer-backdrop {
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.switch-button.active {
+  color: #fff;
+  background: #ba5f8a;
+  box-shadow: 0 8px 16px rgba(186, 95, 138, 0.35);
+}
+
+.calendar-chip--festival {
+  color: #733d57;
+  background: rgba(247, 214, 229, 0.8);
+  border-color: rgba(218, 149, 180, 0.55);
+}
+
+.calendar-day__event-title--festival,
+.calendar-day__event-title--anniversary,
+.calendar-day__event-title--birthday {
+  color: #7f3e5c;
+  background: rgba(248, 215, 229, 0.85);
+}
+
+.celebration-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 35;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 20% 10%, rgba(255, 223, 241, 0.24), transparent 35%),
+    radial-gradient(circle at 80% 16%, rgba(255, 213, 236, 0.2), transparent 34%),
+    linear-gradient(
+    180deg,
+    rgba(255, 226, 241, 0.22) 0%,
+    rgba(255, 233, 244, 0.16) 38%,
+    rgba(255, 244, 250, 0) 100%
+  );
+  animation: celebrationTint 2.4s ease;
+}
+
+.firefly-dot {
+  position: absolute;
+  bottom: -12px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(255, 255, 243, 0.95), rgba(255, 227, 163, 0.72));
+  box-shadow:
+    0 0 12px rgba(255, 242, 186, 0.85),
+    0 0 26px rgba(255, 226, 145, 0.6),
+    0 0 44px rgba(255, 198, 130, 0.32);
+  animation-name: fireflyRise, fireflyTwinkle;
+  animation-timing-function: cubic-bezier(0.23, 0.59, 0.25, 1), ease-in-out;
+  animation-iteration-count: infinite, infinite;
+  animation-duration: 9s, var(--twinkle-duration);
+}
+
+.celebration-banner {
+  position: fixed;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 42;
+  width: min(620px, calc(100% - 24px));
+  text-align: center;
+  padding: 20px 22px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.78);
+  background: linear-gradient(135deg, rgba(255, 244, 250, 0.92), rgba(255, 225, 239, 0.84));
+  box-shadow: 0 24px 64px rgba(185, 105, 145, 0.34);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  pointer-events: none;
+  animation: celebrationBannerIn 420ms cubic-bezier(0.2, 0.7, 0.15, 1);
+}
+
+.celebration-banner__title {
+  margin: 0;
+  font-size: clamp(1.32rem, 3.1vw, 2rem);
+  color: #a24672;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.celebration-banner__subtitle {
+  margin: 6px 0 0;
+  font-size: 1rem;
+  color: #7a5668;
+}
+
+@keyframes fireflyRise {
+  0% {
+    transform: translate3d(0, 0, 0) scale(0.9);
+    opacity: 0;
+  }
+  18% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(var(--drift-x), -106vh, 0) scale(1.08);
+    opacity: 0;
+  }
+}
+
+@keyframes fireflyTwinkle {
+  0%,
+  100% {
+    filter: brightness(0.76);
+  }
+  50% {
+    filter: brightness(1.65);
+  }
+}
+
+@keyframes celebrationBannerIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -14px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
+@keyframes celebrationTint {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes celebrationPulse {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(-1px);
   }
 }

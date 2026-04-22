@@ -1,5 +1,5 @@
 ﻿<script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 
 const todoForm = reactive({
   todo: '',
@@ -17,6 +17,7 @@ const memoryForm = reactive({
 
 const activePage = ref('todos')
 const TODO_CACHE_KEY = 'girlfriendtodo_todos_cache_v1'
+const RELATIONSHIP_START_DATE = '2026-04-10'
 const todos = ref(readTodoCache())
 const memories = ref([])
 const todosLoading = ref(todos.value.length === 0)
@@ -38,13 +39,35 @@ const UPLOAD_TIMEOUT_MS = 25000
 const UPLOAD_MAX_DIMENSION = 1920
 const UPLOAD_TARGET_BYTES = 1200 * 1024
 const UPLOAD_MIN_QUALITY = 0.6
+const FIREFLY_COUNT = 38
+const BIRTHDAY_EVENTS = [{ month: 5, day: 22, title: '卿生日', story: '生日' }]
+const VALENTINE_EVENTS = [
+  { month: 1, day: 14, title: '日記情人節' },
+  { month: 2, day: 14, title: '西洋情人節' },
+  { month: 3, day: 14, title: '白色情人節' },
+  { month: 4, day: 14, title: '黑色情人節' },
+  { month: 5, day: 14, title: '玫瑰情人節' },
+  { month: 5, day: 20, title: '網路情人節' },
+  { month: 6, day: 14, title: '親吻情人節' },
+  { month: 7, day: 14, title: '銀色情人節' },
+  { month: 8, day: 14, title: '綠色情人節' },
+  { month: 9, day: 14, title: '音樂情人節' },
+  { month: 10, day: 14, title: '葡萄酒情人節' },
+  { month: 11, day: 14, title: '電影情人節' },
+  { month: 12, day: 14, title: '擁抱情人節' }
+]
 
 const totalMemoryCount = computed(() => memories.value.length)
 const pageTitle = computed(() => (activePage.value === 'todos' ? '待辦' : '回憶'))
 const isEditingMemory = computed(() => Boolean(memoryForm.id))
 const calendarMonth = ref(new Date().toISOString().slice(0, 7))
 const selectedCalendarDate = ref('')
+const celebrationActive = ref(false)
+const celebrationTitle = ref('')
+const celebrationSubtitle = ref('')
+const fireflyParticles = ref([])
 const weekdayLabels = ['一', '二', '三', '四', '五', '六', '日']
+let celebrationTimerId = null
 const memoriesByDate = computed(() => {
   const map = new Map()
 
@@ -59,38 +82,53 @@ const memoriesByDate = computed(() => {
 
   return map
 })
+const todosByDate = computed(() => {
+  const map = new Map()
+
+  for (const todo of todos.value) {
+    if (!todo?.due_date) continue
+    const key = String(todo.due_date).slice(0, 10)
+    if (!map.has(key)) {
+      map.set(key, [])
+    }
+    map.get(key).push(todo)
+  }
+
+  return map
+})
 const calendarDays = computed(() => {
   const [year, month] = calendarMonth.value.split('-').map(Number)
   if (!year || !month) return []
 
   const firstDate = new Date(year, month - 1, 1)
   const firstWeekday = (firstDate.getDay() + 6) % 7
-  const daysInMonth = new Date(year, month, 0).getDate
+  const totalDays = new Date(year, month, 0).getDate()
+  const cellCount = Math.ceil((firstWeekday + totalDays) / 7) * 7
+  const startDate = new Date(year, month - 1, 1 - firstWeekday)
   const cells = []
 
-  for (let i = 0; i < firstWeekday; i += 1) {
-    cells.push(null)
-  }
+  for (let index = 0; index < cellCount; index += 1) {
+    const current = new Date(startDate)
+    current.setDate(startDate.getDate() + index)
+    const date = `${current.getFullYear()}-${pad2(current.getMonth() + 1)}-${pad2(current.getDate())}`
+    const dayItems = getCalendarItemsByDate(date)
+    const previewItems = dayItems.slice(0, 2)
 
-  for (let day = 1; day <= daysInMonth; day += 1) {
-    const date = `${year}-${pad2(month)}-${pad2(day)}`
-    const dayMemories = memoriesByDate.value.get(date) ?? []
     cells.push({
       date,
-      day,
-      memoryCount: dayMemories.length
+      day: current.getDate(),
+      inMonth: current.getMonth() === month - 1,
+      eventCount: dayItems.length,
+      previewItems,
+      hiddenCount: Math.max(0, dayItems.length - previewItems.length)
     })
-  }
-
-  while (cells.length % 7 !== 0) {
-    cells.push(null)
   }
 
   return cells
 })
-const selectedCalendarMemories = computed(() => {
+const selectedCalendarItems = computed(() => {
   if (!selectedCalendarDate.value) return []
-  return memoriesByDate.value.get(selectedCalendarDate.value) ?? []
+  return getCalendarItemsByDate(selectedCalendarDate.value)
 })
 const calendarMonthLabel = computed(() => {
   const [year, month] = calendarMonth.value.split('-').map(Number)
@@ -103,6 +141,8 @@ const calendarMonthLabel = computed(() => {
 })
 
 onMounted(async () => {
+  checkCelebrationTrigger()
+
   fetchTodos()
     .catch((error) => {
       console.error(error)
@@ -122,6 +162,12 @@ onMounted(async () => {
       memoriesFetchDone.value = true
       maybeApplyDemoData()
     })
+})
+
+onUnmounted(() => {
+  if (celebrationTimerId) {
+    clearTimeout(celebrationTimerId)
+  }
 })
 
 async function fetchTodos() {
@@ -163,6 +209,175 @@ function normalizeMemory(memory) {
     ...memory,
     image_urls: imageUrls
   }
+}
+
+function getCalendarItemsByDate(date) {
+  const items = []
+  const dayTodos = todosByDate.value.get(date) ?? []
+  const dayMemories = memoriesByDate.value.get(date) ?? []
+
+  const [year, month, day] = String(date).split('-').map(Number)
+  if (!year || !month || !day) {
+    return items
+  }
+
+  for (const event of VALENTINE_EVENTS) {
+    if (event.month === month && event.day === day) {
+      items.push({
+        type: 'festival',
+        title: event.title,
+        story: '情人節'
+      })
+    }
+  }
+
+  for (const event of BIRTHDAY_EVENTS) {
+    if (event.month === month && event.day === day) {
+      items.push({
+        type: 'birthday',
+        title: event.title,
+        story: event.story
+      })
+    }
+  }
+
+  const relationshipEvents = getRelationshipEvents(date)
+  if (relationshipEvents.length) {
+    items.push(...relationshipEvents)
+  }
+
+  for (const todo of dayTodos) {
+    items.push({
+      type: 'todo',
+      title: todo.todo,
+      story: todo.note ?? ''
+    })
+  }
+
+  for (const memory of dayMemories) {
+    items.push({
+      type: 'memory',
+      title: memory.title,
+      story: memory.story ?? '',
+      memory
+    })
+  }
+
+  return items
+}
+
+function getRelationshipEvents(date) {
+  const events = []
+  const start = parseDateOnly(RELATIONSHIP_START_DATE)
+  const current = parseDateOnly(date)
+  if (!start || !current) return events
+
+  const diffDays = Math.floor((current.getTime() - start.getTime()) / 86400000) + 1
+  if (diffDays >= 100 && diffDays % 100 === 0) {
+    events.push({
+      type: 'anniversary',
+      title: `交往第 ${diffDays} 天`,
+      story: '交往百日紀念'
+    })
+  }
+
+  const isSameMonthDay =
+    current.getMonth() === start.getMonth() && current.getDate() === start.getDate()
+  if (isSameMonthDay && current >= start) {
+    const anniversaryYear = current.getFullYear() - start.getFullYear()
+    events.push({
+      type: 'anniversary',
+      title: anniversaryYear === 0 ? '交往開始紀念日' : `交往 ${anniversaryYear} 週年`,
+      story: '每年紀念'
+    })
+  }
+
+  return events
+}
+
+function checkCelebrationTrigger() {
+  const params = new URLSearchParams(window.location.search)
+  const forcedName = (params.get('celebrate') ?? '').trim()
+  const forcedDays = Number(params.get('celebrate_days') ?? '')
+
+  if (Number.isFinite(forcedDays) && forcedDays > 0) {
+    triggerCelebration(`在一起的第 ${forcedDays} 天`, '網址測試觸發')
+    return
+  }
+
+  if (forcedName) {
+    triggerCelebration(`${forcedName}快樂`, '網址測試觸發')
+    return
+  }
+
+  const today = getTodayISOInTaipei()
+
+  const candidates = getCalendarItemsByDate(today).filter((item) =>
+    ['birthday', 'anniversary', 'festival'].includes(item.type)
+  )
+  if (!candidates.length) {
+    return
+  }
+
+  const selected = chooseCelebrationEvent(candidates)
+  const isDayMilestone = selected.type === 'anniversary' && selected.title.includes('交往第 ')
+  const title = isDayMilestone ? selected.title.replace('交往第 ', '在一起的第 ') : `${selected.title}快樂`
+  triggerCelebration(title, selected.story ?? '今天是特別的一天')
+}
+
+function chooseCelebrationEvent(items) {
+  const priority = { birthday: 3, anniversary: 2, festival: 1 }
+  return [...items].sort((a, b) => (priority[b.type] ?? 0) - (priority[a.type] ?? 0))[0]
+}
+
+function triggerCelebration(title, subtitle) {
+  celebrationTitle.value = title
+  celebrationSubtitle.value = subtitle
+  fireflyParticles.value = generateFireflyParticles(FIREFLY_COUNT)
+  celebrationActive.value = true
+
+  if (celebrationTimerId) {
+    clearTimeout(celebrationTimerId)
+  }
+
+  celebrationTimerId = setTimeout(() => {
+    celebrationActive.value = false
+  }, 6000)
+}
+
+function generateFireflyParticles(count) {
+  return Array.from({ length: count }, (_, index) => {
+    const size = 6 + Math.random() * 11
+    const duration = 6.8 + Math.random() * 5.4
+    const delay = Math.random() * 2.4
+    const left = Math.random() * 100
+    const drift = -56 + Math.random() * 112
+    const twinkle = 1 + Math.random() * 1.8
+
+    return {
+      id: `f-${index}-${Date.now()}`,
+      size: `${size}px`,
+      left: `${left}%`,
+      drift: `${drift}px`,
+      duration: `${duration}s`,
+      delay: `${delay}s`,
+      twinkle: `${twinkle}s`
+    }
+  })
+}
+
+function getTodayISOInTaipei() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Taipei',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(new Date())
+
+  const year = parts.find((part) => part.type === 'year')?.value ?? '1970'
+  const month = parts.find((part) => part.type === 'month')?.value ?? '01'
+  const day = parts.find((part) => part.type === 'day')?.value ?? '01'
+  return `${year}-${month}-${day}`
 }
 
 function openTodoComposer() {
@@ -541,6 +756,13 @@ function formatDate(value) {
   }).format(new Date(value))
 }
 
+function parseDateOnly(value) {
+  if (!value) return null
+  const [year, month, day] = String(value).split('-').map(Number)
+  if (!year || !month || !day) return null
+  return new Date(year, month - 1, day)
+}
+
 function pad2(value) {
   return String(value).padStart(2, '0')
 }
@@ -627,7 +849,29 @@ function writeTodoCache(nextTodos) {
 </script>
 
 <template>
-  <div class="app-shell">
+  <div class="app-shell" :class="{ 'app-shell--celebration': celebrationActive }">
+    <div v-if="celebrationActive" class="celebration-overlay" aria-hidden="true">
+      <span
+        v-for="particle in fireflyParticles"
+        :key="particle.id"
+        class="firefly-dot"
+        :style="{
+          left: particle.left,
+          width: particle.size,
+          height: particle.size,
+          animationDuration: particle.duration,
+          animationDelay: particle.delay,
+          '--drift-x': particle.drift,
+          '--twinkle-duration': particle.twinkle
+        }"
+      />
+    </div>
+
+    <div v-if="celebrationActive" class="celebration-banner" role="status" aria-live="polite">
+      <p class="celebration-banner__title">{{ celebrationTitle }}</p>
+      <p class="celebration-banner__subtitle">{{ celebrationSubtitle }}</p>
+    </div>
+
     <header class="hero-strip">
       <div class="hero-title">
         <h1>和她的計畫與回憶</h1>
@@ -732,6 +976,12 @@ function writeTodoCache(nextTodos) {
       </section>
 
       <section v-else class="content-list calendar-view">
+        <div class="calendar-legend">
+          <span class="calendar-chip calendar-chip--festival">節日/生日</span>
+          <span class="calendar-chip calendar-chip--todo">待辦</span>
+          <span class="calendar-chip calendar-chip--memory">回憶</span>
+        </div>
+
         <div class="calendar-head">
           <button class="calendar-nav" type="button" @click="shiftCalendarMonth(-1)">‹</button>
           <h3>{{ calendarMonthLabel }}</h3>
@@ -745,36 +995,54 @@ function writeTodoCache(nextTodos) {
         <div class="calendar-grid calendar-grid--days">
           <button
             v-for="(dayCell, index) in calendarDays"
-            :key="dayCell ? dayCell.date : `empty-${index}`"
+            :key="`${dayCell.date}-${index}`"
             class="calendar-day"
             :class="{
-              'calendar-day--empty': !dayCell,
-              'calendar-day--has-memory': dayCell && dayCell.memoryCount > 0,
-              'calendar-day--selected': dayCell && dayCell.date === selectedCalendarDate
+              'calendar-day--outside': !dayCell.inMonth,
+              'calendar-day--has-memory': dayCell.eventCount > 0,
+              'calendar-day--selected': dayCell.date === selectedCalendarDate
             }"
             type="button"
-            :disabled="!dayCell"
-            @click="dayCell && selectCalendarDate(dayCell.date)"
+            @click="selectCalendarDate(dayCell.date)"
           >
-            <span v-if="dayCell" class="calendar-day__num">{{ dayCell.day }}</span>
-            <span v-if="dayCell && dayCell.memoryCount > 0" class="calendar-day__dot"></span>
+            <span class="calendar-day__num">{{ dayCell.day }}</span>
+            <div v-if="dayCell.eventCount > 0" class="calendar-day__events">
+              <p
+                v-for="item in dayCell.previewItems"
+                :key="`${dayCell.date}-${item.type}-${item.title}`"
+                class="calendar-day__event-title"
+                :class="`calendar-day__event-title--${item.type}`"
+              >
+                {{ item.title }}
+              </p>
+              <p v-if="dayCell.hiddenCount > 0" class="calendar-day__event-more">
+                +{{ dayCell.hiddenCount }} 則
+              </p>
+            </div>
           </button>
         </div>
 
         <div v-if="selectedCalendarDate" class="calendar-memory-panel">
-          <h4>回憶：{{ formatDate(selectedCalendarDate) }}</h4>
-          <div v-if="selectedCalendarMemories.length" class="calendar-memory-list">
+          <h4>行程：{{ formatDate(selectedCalendarDate) }}</h4>
+          <div v-if="selectedCalendarItems.length" class="calendar-memory-list">
             <article
-              v-for="memory in selectedCalendarMemories"
-              :key="`calendar-${memory.id}`"
+              v-for="(item, index) in selectedCalendarItems"
+              :key="`calendar-item-${selectedCalendarDate}-${index}-${item.title}`"
               class="calendar-memory-item"
-              @click="openMemoryDetail(memory)"
+              @click="item.type === 'memory' ? openMemoryDetail(item.memory) : null"
             >
-              <h5>{{ memory.title }}</h5>
-              <p>{{ memory.story || ' ' }}</p>
+              <h5>
+                <span v-if="item.type === 'anniversary'">紀念日｜</span>
+                <span v-else-if="item.type === 'festival'">情人節｜</span>
+                <span v-else-if="item.type === 'birthday'">生日｜</span>
+                <span v-else-if="item.type === 'todo'">待辦｜</span>
+                <span v-else>回憶｜</span>
+                {{ item.title }}
+              </h5>
+              <p>{{ item.story || ' ' }}</p>
             </article>
           </div>
-          <p v-else class="quiet-state">這天還沒有回憶</p>
+          <p v-else class="quiet-state">這天沒有事件</p>
         </div>
       </section>
     </main>
