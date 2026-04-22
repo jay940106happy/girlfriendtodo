@@ -60,8 +60,8 @@ const VALENTINE_EVENTS = [
 const totalMemoryCount = computed(() => memories.value.length)
 const pageTitle = computed(() => (activePage.value === 'todos' ? '待辦' : '回憶'))
 const isEditingMemory = computed(() => Boolean(memoryForm.id))
-const calendarMonth = ref(new Date().toISOString().slice(0, 7))
-const selectedCalendarDate = ref('')
+const calendarMonth = ref(getTodayISOInTaipei().slice(0, 7))
+const selectedCalendarDate = ref(getTodayISOInTaipei())
 const celebrationActive = ref(false)
 const celebrationTitle = ref('')
 const celebrationSubtitle = ref('')
@@ -179,7 +179,7 @@ async function fetchTodos() {
     return
   }
 
-  todos.value = data ?? []
+  todos.value = (data ?? []).map(normalizeTodo)
   writeTodoCache(todos.value)
 }
 
@@ -207,8 +207,36 @@ function normalizeMemory(memory) {
 
   return {
     ...memory,
+    memory_date: normalizeDateInputValue(memory.memory_date),
     image_urls: imageUrls
   }
+}
+
+function normalizeTodo(todo) {
+  return {
+    ...todo,
+    due_date: normalizeDateInputValue(todo?.due_date)
+  }
+}
+
+function normalizeDateInputValue(value) {
+  if (!value) return ''
+  const text = String(value).trim()
+  if (!text) return ''
+
+  const isoMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (isoMatch) {
+    return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`
+  }
+
+  const slashMatch = text.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})/)
+  if (slashMatch) {
+    return `${slashMatch[1]}-${pad2(Number(slashMatch[2]))}-${pad2(Number(slashMatch[3]))}`
+  }
+
+  const parsed = new Date(text)
+  if (Number.isNaN(parsed.getTime())) return ''
+  return `${parsed.getFullYear()}-${pad2(parsed.getMonth() + 1)}-${pad2(parsed.getDate())}`
 }
 
 function getCalendarItemsByDate(date) {
@@ -771,7 +799,13 @@ function shiftCalendarMonth(offset) {
   const [year, month] = calendarMonth.value.split('-').map(Number)
   const next = new Date(year, month - 1 + offset, 1)
   calendarMonth.value = `${next.getFullYear()}-${pad2(next.getMonth() + 1)}`
-  selectedCalendarDate.value = ''
+  const today = getTodayISOInTaipei()
+  if (selectedCalendarDate.value.slice(0, 7) !== calendarMonth.value) {
+    selectedCalendarDate.value = `${calendarMonth.value}-01`
+  }
+  if (calendarMonth.value === today.slice(0, 7)) {
+    selectedCalendarDate.value = today
+  }
 }
 
 function selectCalendarDate(date) {
@@ -783,7 +817,7 @@ function readTodoCache() {
     const raw = localStorage.getItem(TODO_CACHE_KEY)
     if (!raw) return []
     const data = JSON.parse(raw)
-    return Array.isArray(data) ? data : []
+    return Array.isArray(data) ? data.map(normalizeTodo) : []
   } catch {
     return []
   }
