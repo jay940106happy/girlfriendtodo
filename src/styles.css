@@ -877,6 +877,51 @@ img {
   .story-cover .story-image {
     aspect-ratio: 4 / 3;
   }
+
+  .calendar-legend {
+    gap: 6px;
+  }
+
+  .calendar-chip {
+    padding: 3px 8px;
+    font-size: 0.68rem;
+  }
+
+  .calendar-day {
+    min-height: 88px;
+    padding: 20px 4px 4px;
+  }
+
+  .calendar-day__num {
+    top: 5px;
+    left: 6px;
+    font-size: 0.76rem;
+  }
+
+  .calendar-day__events {
+    gap: 3px;
+  }
+
+  .calendar-day__event-title {
+    padding: 2px 4px;
+    font-size: 0.64rem;
+    line-height: 1.15;
+    white-space: normal;
+    overflow: hidden;
+    text-overflow: clip;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    word-break: break-word;
+  }
+
+  .calendar-day__events .calendar-day__event-title:nth-child(n + 2) {
+    display: none;
+  }
+
+  .calendar-day__event-more {
+    font-size: 0.62rem;
+  }
 }
 
 /* Romantic celebration theme overrides */
