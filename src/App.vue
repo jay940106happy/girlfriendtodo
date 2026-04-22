@@ -42,7 +42,10 @@ const UPLOAD_MAX_DIMENSION = 1920
 const UPLOAD_TARGET_BYTES = 1200 * 1024
 const UPLOAD_MIN_QUALITY = 0.6
 const FIREFLY_COUNT = 38
-const BIRTHDAY_EVENTS = [{ month: 5, day: 22, title: '卿生日', story: '生日' }]
+const BIRTHDAY_EVENTS = [
+  { month: 1, day: 6, title: '曜生日', story: '生日' },
+  { month: 5, day: 22, title: '卿生日', story: '生日' }
+]
 const VALENTINE_EVENTS = [
   { month: 1, day: 14, title: '日記情人節' },
   { month: 2, day: 14, title: '西洋情人節' },
