@@ -5,6 +5,7 @@ create table if not exists todo (
   created_at timestamptz not null default now(),
   todo text not null,
   note text,
+  due_date date,
   completed boolean not null default false
 );
 
@@ -19,7 +20,7 @@ create table if not exists memories (
   source_todo_id bigint unique
 );
 
-alter table todo drop column if exists due_date;
+alter table todo add column if not exists due_date date;
 alter table memories alter column story set default '';
 alter table memories alter column memory_date drop not null;
 alter table memories add column if not exists image_urls text[] not null default '{}';

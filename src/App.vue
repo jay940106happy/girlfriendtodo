@@ -3,7 +3,8 @@ import { computed, onMounted, reactive, ref } from 'vue'
 
 const todoForm = reactive({
   todo: '',
-  note: ''
+  note: '',
+  due_date: ''
 })
 
 const memoryForm = reactive({
@@ -15,9 +16,10 @@ const memoryForm = reactive({
 })
 
 const activePage = ref('todos')
-const todos = ref([])
+const TODO_CACHE_KEY = 'girlfriendtodo_todos_cache_v1'
+const todos = ref(readTodoCache())
 const memories = ref([])
-const todosLoading = ref(true)
+const todosLoading = ref(todos.value.length === 0)
 const memoriesLoading = ref(true)
 const submittingTodo = ref(false)
 const submittingMemory = ref(false)
@@ -39,11 +41,13 @@ const pageTitle = computed(() => (activePage.value === 'todos' ? '待辦' : '回
 const isEditingMemory = computed(() => Boolean(memoryForm.id))
 
 onMounted(async () => {
-  try {
-    await fetchTodos()
-  } finally {
-    todosLoading.value = false
-  }
+  fetchTodos()
+    .catch((error) => {
+      console.error(error)
+    })
+    .finally(() => {
+      todosLoading.value = false
+    })
 
   fetchMemories()
     .catch((error) => {
@@ -64,6 +68,7 @@ async function fetchTodos() {
   }
 
   todos.value = data ?? []
+  writeTodoCache(todos.value)
 }
 
 async function fetchMemories() {
@@ -98,6 +103,7 @@ function openTodoComposer() {
   composerOpen.value = true
   todoForm.todo = ''
   todoForm.note = ''
+  todoForm.due_date = ''
   statusMessage.value = ''
   errorMessage.value = ''
 }
@@ -161,7 +167,8 @@ async function addTodo() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       todo: todoForm.todo.trim(),
-      note: todoForm.note.trim() || null
+      note: todoForm.note.trim() || null,
+      due_date: todoForm.due_date || null
     })
   })
 
@@ -183,6 +190,7 @@ function moveTodoToMemory(todo) {
   pendingTodoToMove.value = todo
   memoryForm.title = todo.todo ?? ''
   memoryForm.story = todo.note ?? ''
+  memoryForm.memory_date = todo.due_date ?? ''
 }
 
 async function markTodoAsCompleted(todoId) {
@@ -465,6 +473,25 @@ function formatDate(value) {
   }).format(new Date(value))
 }
 
+function readTodoCache() {
+  try {
+    const raw = localStorage.getItem(TODO_CACHE_KEY)
+    if (!raw) return []
+    const data = JSON.parse(raw)
+    return Array.isArray(data) ? data : []
+  } catch {
+    return []
+  }
+}
+
+function writeTodoCache(nextTodos) {
+  try {
+    localStorage.setItem(TODO_CACHE_KEY, JSON.stringify(nextTodos))
+  } catch {
+    // Ignore storage errors (private mode / quota)
+  }
+}
+
 </script>
 
 <template>
@@ -503,6 +530,9 @@ function formatDate(value) {
 
         <article v-for="item in todos" :key="item.id" class="story-card story-card--todo">
           <div class="story-card__body">
+            <div class="story-meta">
+              <span>預計：{{ item.due_date ? formatDate(item.due_date) : '未決定' }}</span>
+            </div>
             <h3>{{ item.todo }}</h3>
             <p v-if="item.note">{{ item.note }}</p>
           </div>
@@ -588,6 +618,11 @@ function formatDate(value) {
 
         <form v-if="activePage === 'todos'" class="composer-form" @submit.prevent="addTodo">
           <input v-model="todoForm.todo" type="text" placeholder="想一起做什麼" />
+          <label class="date-field">
+            <span class="date-label">預計日期（可選）</span>
+            <input v-model="todoForm.due_date" type="date" />
+            <small v-if="!todoForm.due_date" class="date-hint">未選擇時會顯示「未決定」</small>
+          </label>
           <textarea v-model="todoForm.note" rows="4" placeholder="留一句話"></textarea>
           <button class="primary-button" type="submit" :disabled="submittingTodo">
             {{ submittingTodo ? '儲存中...' : '儲存' }}

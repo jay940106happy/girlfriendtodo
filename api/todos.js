@@ -1,12 +1,22 @@
 import { sql } from './_db.js'
 
+let todoSchemaEnsured = false
+
+async function ensureTodoSchema() {
+  if (todoSchemaEnsured) return
+  await sql`alter table todo add column if not exists due_date date`
+  todoSchemaEnsured = true
+}
+
 export async function GET() {
   try {
+    await ensureTodoSchema()
+
     const rows = await sql`
-      select id, todo, note, completed, created_at
+      select id, todo, note, due_date, completed, created_at
       from todo
       where completed = false
-      order by created_at desc
+      order by due_date asc nulls last, created_at desc
     `
 
     return Response.json(rows)
@@ -18,16 +28,22 @@ export async function GET() {
 
 export async function POST(request) {
   try {
-    const { todo, note } = await request.json()
+    await ensureTodoSchema()
+    const { todo, note, due_date } = await request.json()
 
     if (!String(todo ?? '').trim()) {
       return Response.json({ error: 'Todo is required.' }, { status: 400 })
     }
 
     const [row] = await sql`
-      insert into todo (todo, note, completed)
-      values (${String(todo).trim()}, ${note ? String(note).trim() : null}, false)
-      returning id, todo, note, completed, created_at
+      insert into todo (todo, note, due_date, completed)
+      values (
+        ${String(todo).trim()},
+        ${note ? String(note).trim() : null},
+        ${due_date || null},
+        false
+      )
+      returning id, todo, note, due_date, completed, created_at
     `
 
     return Response.json(row, { status: 201 })
@@ -39,6 +55,7 @@ export async function POST(request) {
 
 export async function PATCH(request) {
   try {
+    await ensureTodoSchema()
     const { id, completed } = await request.json()
 
     if (!id) {
@@ -49,7 +66,7 @@ export async function PATCH(request) {
       update todo
       set completed = ${Boolean(completed)}
       where id = ${id}
-      returning id, todo, note, completed, created_at
+      returning id, todo, note, due_date, completed, created_at
     `
 
     if (!todo) {
