@@ -904,18 +904,15 @@ img {
 
   .calendar-day__event-title {
     padding: 2px 4px;
-    font-size: 0.64rem;
-    line-height: 1.15;
-    white-space: normal;
+    font-size: 0.62rem;
+    line-height: 1.2;
+    white-space: nowrap;
     overflow: hidden;
-    text-overflow: clip;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    word-break: break-word;
+    text-overflow: ellipsis;
+    display: block;
   }
 
-  .calendar-day__events .calendar-day__event-title:nth-child(n + 2) {
+  .calendar-day__events .calendar-day__event-title:nth-child(n + 3) {
     display: none;
   }
 
