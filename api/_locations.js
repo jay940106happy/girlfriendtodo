@@ -26,6 +26,44 @@ export async function ensureImageLocationsTable() {
   `
 }
 
+export async function ensurePendingImageLocationsTable() {
+  await sql`
+    create table if not exists pending_image_locations (
+      image_url text primary key,
+      latitude double precision not null,
+      longitude double precision not null,
+      created_at timestamptz not null default now()
+    )
+  `
+}
+
+export async function claimPendingLocations(memoryId, imageUrls = []) {
+  await ensureImageLocationsTable()
+  await ensurePendingImageLocationsTable()
+
+  for (const imageUrl of imageUrls) {
+    const [pending] = await sql`
+      select latitude, longitude
+      from pending_image_locations
+      where image_url = ${imageUrl}
+    `
+    if (!pending) continue
+
+    await sql`
+      insert into image_locations (memory_id, image_url, latitude, longitude, source)
+      values (${memoryId}, ${imageUrl}, ${pending.latitude}, ${pending.longitude}, 'upload_exif')
+      on conflict (memory_id, image_url)
+      do update set
+        latitude = excluded.latitude,
+        longitude = excluded.longitude,
+        source = excluded.source,
+        updated_at = now()
+    `
+
+    await sql`delete from pending_image_locations where image_url = ${imageUrl}`
+  }
+}
+
 export function normalizeCoordinate(value, min, max) {
   const number = Number(value)
   if (!Number.isFinite(number) || number < min || number > max) {
