@@ -30,7 +30,7 @@ export async function GET(request) {
         m.title,
         m.story,
         m.memory_date,
-        m.image_url,
+        m.image_url as memory_cover_url,
         m.image_urls
       from image_locations l
       join memories m on m.id = l.memory_id
