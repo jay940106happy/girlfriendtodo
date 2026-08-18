@@ -1,4 +1,5 @@
 import { sql } from './_db.js'
+import { claimPendingLocations, ensureImageLocationsTable } from './_locations.js'
 
 export async function GET() {
   try {
@@ -41,6 +42,7 @@ export async function POST(request) {
       returning id, title, story, memory_date, image_url, image_urls, created_at, source_todo_id
     `
 
+    await claimPendingLocations(row.id, normalizedImageUrls)
     return Response.json(row, { status: 201 })
   } catch (error) {
     console.error(error)
@@ -73,6 +75,17 @@ export async function PATCH(request) {
       where id = ${id}
       returning id, title, story, memory_date, image_url, image_urls, created_at, source_todo_id
     `
+
+    await claimPendingLocations(id, normalizedImageUrls)
+    await ensureImageLocationsTable()
+    if (normalizedImageUrls.length) {
+      await sql`
+        delete from image_locations
+        where memory_id = ${id} and not (image_url = any(${normalizedImageUrls}))
+      `
+    } else {
+      await sql`delete from image_locations where memory_id = ${id}`
+    }
 
     return Response.json(row)
   } catch (error) {
