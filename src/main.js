@@ -14,11 +14,17 @@ const RootComponent = path === '/map' ? MapPage : path === '/admin' ? AdminPage 
 createApp(RootComponent).mount('#app')
 
 if (path === '/') {
-  const mapLink = document.createElement('a')
-  mapLink.href = '/map'
-  mapLink.textContent = '♡ 地圖'
-  mapLink.className = 'global-map-link'
-  document.body.appendChild(mapLink)
+  const topNav = document.querySelector('header nav')
+  if (topNav) {
+    const mapButton = document.createElement('button')
+    mapButton.type = 'button'
+    mapButton.textContent = '地圖'
+    mapButton.className = 'switch-button'
+    mapButton.addEventListener('click', () => {
+      window.location.href = '/map'
+    })
+    topNav.appendChild(mapButton)
+  }
 }
 
 function installUploadGpsCapture() {
