@@ -4,12 +4,25 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>日常</title>
-    <meta
-      name="description"
+    <meta name="description" content="我們的待辦、回憶與足跡" />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""
     />
+    <style>
+      .global-map-link{position:fixed;z-index:900;right:16px;bottom:max(18px,env(safe-area-inset-bottom));padding:10px 14px;border:1px solid rgba(122,89,78,.16);border-radius:999px;background:rgba(255,250,246,.92);backdrop-filter:blur(14px);box-shadow:0 8px 24px rgba(68,48,38,.12);color:#8c6258;text-decoration:none;font:600 13px/1 system-ui,-apple-system,sans-serif}
+    </style>
   </head>
   <body>
     <div id="app"></div>
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+    ></script>
+    <script src="https://cdn.jsdelivr.net/npm/exifr@7.1.3/dist/lite.umd.js"></script>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>
