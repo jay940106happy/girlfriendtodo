@@ -25,6 +25,14 @@ function imageUrls(memory) {
   return memory?.image_url ? [memory.image_url] : []
 }
 
+function thumbnailUrl(memory, imageUrl) {
+  const urls = imageUrls(memory)
+  const index = urls.indexOf(imageUrl)
+  const thumbs = Array.isArray(memory?.thumbnail_urls) ? memory.thumbnail_urls : []
+  const thumb = index >= 0 ? thumbs[index] : ''
+  return typeof thumb === 'string' && thumb.trim() ? thumb : imageUrl
+}
+
 function getLocation(memoryId, imageUrl) {
   return locations.value.find((x) => x.memory_id === memoryId && x.image_url === imageUrl) || null
 }
@@ -38,7 +46,7 @@ const allPhotos = computed(() => {
   for (const memory of memories.value) {
     imageUrls(memory).forEach((url, index) => {
       const location = getLocation(memory.id, url)
-      rows.push({ memory, url, index, location, located: Boolean(location) })
+      rows.push({ memory, url, thumbnailUrl: thumbnailUrl(memory, url), index, location, located: Boolean(location) })
     })
   }
   return rows.sort((a, b) => String(b.memory.memory_date || '').localeCompare(String(a.memory.memory_date || '')))
@@ -72,10 +80,7 @@ const selectedMemory = computed(() => memories.value.find((m) => m.id === select
 const selectedImageLocation = computed(() => getLocation(selectedMemoryId.value, selectedImageUrl.value))
 const selectedFilteredIndex = computed(() => filteredPhotos.value.findIndex((x) => x.memory.id === selectedMemoryId.value && x.url === selectedImageUrl.value))
 
-function setFilter(value) {
-  filter.value = value
-  page.value = 1
-}
+function setFilter(value) { filter.value = value; page.value = 1 }
 
 async function openEditor(item) {
   selectedMemoryId.value = item.memory.id
@@ -93,19 +98,10 @@ function backToReview() {
   mode.value = 'review'
   statusMessage.value = ''
   errorMessage.value = ''
-  if (map) {
-    map.remove()
-    map = null
-    pin = null
-  }
+  if (map) { map.remove(); map = null; pin = null }
 }
 
-function selectImage(url) {
-  selectedImageUrl.value = url
-  statusMessage.value = ''
-  errorMessage.value = ''
-  loadSelectedLocation()
-}
+function selectImage(url) { selectedImageUrl.value = url; statusMessage.value = ''; errorMessage.value = ''; loadSelectedLocation() }
 
 function loadSelectedLocation() {
   const existing = selectedImageLocation.value
@@ -142,11 +138,7 @@ function movePin(lat, lng, zoom = null) {
 function initMap() {
   if (!mapElement.value || !window.L || map) return
   map = window.L.map(mapElement.value).setView([25.08, 121.52], 11)
-  window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxNativeZoom: 19,
-    maxZoom: 21,
-    attribution: '&copy; OpenStreetMap contributors'
-  }).addTo(map)
+  window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxNativeZoom: 19, maxZoom: 21, attribution: '&copy; OpenStreetMap contributors' }).addTo(map)
   map.on('click', (event) => {
     latitude.value = event.latlng.lat.toFixed(7)
     longitude.value = event.latlng.lng.toFixed(7)
@@ -165,26 +157,14 @@ function goRelative(step) {
 async function saveLocation() {
   const lat = Number(latitude.value)
   const lng = Number(longitude.value)
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-    errorMessage.value = '請先在右側地圖點一下放置圖釘。'
-    return
-  }
-
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) { errorMessage.value = '請先在右側地圖點一下放置圖釘。'; return }
   saving.value = true
   statusMessage.value = ''
   errorMessage.value = ''
   try {
     const response = await fetch('/api/locations', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        memory_id: selectedMemoryId.value,
-        image_url: selectedImageUrl.value,
-        latitude: lat,
-        longitude: lng,
-        location_name: locationName.value.trim() || null,
-        source: 'manual'
-      })
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ memory_id: selectedMemoryId.value, image_url: selectedImageUrl.value, latitude: lat, longitude: lng, location_name: locationName.value.trim() || null, source: 'manual' })
     })
     const data = await response.json().catch(() => ({}))
     if (!response.ok) throw new Error(data?.error || '儲存失敗')
@@ -194,25 +174,14 @@ async function saveLocation() {
     statusMessage.value = '已儲存這張照片的定位。'
     await nextTick()
     loadSelectedLocation()
-  } catch (error) {
-    errorMessage.value = error?.message || '儲存失敗'
-  } finally {
-    saving.value = false
-  }
+  } catch (error) { errorMessage.value = error?.message || '儲存失敗' } finally { saving.value = false }
 }
 
 async function removeLocation() {
   if (!selectedImageLocation.value) return
   if (!window.confirm('確定要清除這張照片的位置嗎？')) return
-  const response = await fetch('/api/locations', {
-    method: 'DELETE',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ memory_id: selectedMemoryId.value, image_url: selectedImageUrl.value })
-  })
-  if (!response.ok) {
-    errorMessage.value = '清除失敗。'
-    return
-  }
+  const response = await fetch('/api/locations', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ memory_id: selectedMemoryId.value, image_url: selectedImageUrl.value }) })
+  if (!response.ok) { errorMessage.value = '清除失敗。'; return }
   locations.value = locations.value.filter((x) => !(x.memory_id === selectedMemoryId.value && x.image_url === selectedImageUrl.value))
   loadSelectedLocation()
   statusMessage.value = '已清除定位。'
@@ -220,19 +189,14 @@ async function removeLocation() {
 
 async function loadData() {
   try {
-    const [memoryResponse, locationResponse] = await Promise.all([
-      fetch('/api/memories'),
-      fetch('/api/locations')
-    ])
+    const [memoryResponse, locationResponse] = await Promise.all([fetch('/api/memories'), fetch('/api/locations')])
     const memoryData = await memoryResponse.json().catch(() => [])
     const locationData = await locationResponse.json().catch(() => [])
     if (!memoryResponse.ok) throw new Error('讀取回憶失敗')
     if (!locationResponse.ok) throw new Error('讀取定位失敗')
     memories.value = Array.isArray(memoryData) ? memoryData : []
     locations.value = Array.isArray(locationData) ? locationData : []
-  } catch (error) {
-    errorMessage.value = error?.message || '讀取資料失敗'
-  }
+  } catch (error) { errorMessage.value = error?.message || '讀取資料失敗' }
 }
 
 onMounted(loadData)
@@ -241,107 +205,20 @@ onUnmounted(() => map?.remove())
 
 <template>
   <main class="admin-page">
-    <header class="topbar">
-      <div>
-        <a href="/">← 回首頁</a>
-        <h1>照片定位管理</h1>
-        <p>全部 {{ counts.total }} · 未定位 {{ counts.missing }} · 已定位 {{ counts.located }}</p>
-      </div>
-      <button v-if="mode === 'edit'" type="button" @click="backToReview">回照片牆</button>
-    </header>
+    <header class="topbar"><div><a href="/">← 回首頁</a><h1>照片定位管理</h1><p>全部 {{ counts.total }} · 未定位 {{ counts.missing }} · 已定位 {{ counts.located }}</p></div><button v-if="mode === 'edit'" type="button" @click="backToReview">回照片牆</button></header>
 
     <section v-if="mode === 'review'" class="review">
-      <div class="review-toolbar">
-        <div class="segmented" role="tablist" aria-label="定位狀態篩選">
-          <button type="button" :class="{ active: filter === 'all' }" @click="setFilter('all')">全部 <span>{{ counts.total }}</span></button>
-          <button type="button" :class="{ active: filter === 'missing' }" @click="setFilter('missing')">未定位 <span>{{ counts.missing }}</span></button>
-          <button type="button" :class="{ active: filter === 'located' }" @click="setFilter('located')">已定位 <span>{{ counts.located }}</span></button>
-        </div>
-        <input v-model="searchText" type="search" placeholder="搜尋標題、日期、地點或來源" @input="page = 1" />
-      </div>
-
-      <div class="review-intro">
-        <h2>{{ filter === 'located' ? '檢查已定位照片' : filter === 'missing' ? '待補定位照片' : '全部照片' }}</h2>
-        <p>{{ filter === 'located' ? '點照片後，右側地圖會直接跳到目前定位點。' : '點任一張照片即可查看或調整定位。' }}</p>
-      </div>
-
-      <div class="photo-wall">
-        <button v-for="item in pagedPhotos" :key="item.memory.id + item.url" type="button" class="photo-card" @click="openEditor(item)">
-          <div class="photo-frame">
-            <img :src="item.url" alt="" loading="lazy" />
-            <span class="status-badge" :class="item.located ? 'located' : 'missing'">{{ item.located ? '已定位' : '未定位' }}</span>
-          </div>
-          <div class="photo-copy">
-            <strong>{{ item.memory.title }}</strong>
-            <span>{{ String(item.memory.memory_date || '').slice(0,10) }} · 第 {{ item.index + 1 }} 張</span>
-            <small v-if="item.location?.location_name">{{ item.location.location_name }}</small>
-            <small v-else-if="item.location">{{ Number(item.location.latitude).toFixed(5) }}, {{ Number(item.location.longitude).toFixed(5) }}</small>
-          </div>
-        </button>
-      </div>
-
+      <div class="review-toolbar"><div class="segmented" role="tablist" aria-label="定位狀態篩選"><button type="button" :class="{ active: filter === 'all' }" @click="setFilter('all')">全部 <span>{{ counts.total }}</span></button><button type="button" :class="{ active: filter === 'missing' }" @click="setFilter('missing')">未定位 <span>{{ counts.missing }}</span></button><button type="button" :class="{ active: filter === 'located' }" @click="setFilter('located')">已定位 <span>{{ counts.located }}</span></button></div><input v-model="searchText" type="search" placeholder="搜尋標題、日期、地點或來源" @input="page = 1" /></div>
+      <div class="review-intro"><h2>{{ filter === 'located' ? '檢查已定位照片' : filter === 'missing' ? '待補定位照片' : '全部照片' }}</h2><p>{{ filter === 'located' ? '點照片後，右側地圖會直接跳到目前定位點。' : '點任一張照片即可查看或調整定位。' }}</p></div>
+      <div class="photo-wall"><button v-for="item in pagedPhotos" :key="item.memory.id + item.url" type="button" class="photo-card" @click="openEditor(item)"><div class="photo-frame"><img :src="item.thumbnailUrl" alt="" loading="lazy" decoding="async" /><span class="status-badge" :class="item.located ? 'located' : 'missing'">{{ item.located ? '已定位' : '未定位' }}</span></div><div class="photo-copy"><strong>{{ item.memory.title }}</strong><span>{{ String(item.memory.memory_date || '').slice(0,10) }} · 第 {{ item.index + 1 }} 張</span><small v-if="item.location?.location_name">{{ item.location.location_name }}</small><small v-else-if="item.location">{{ Number(item.location.latitude).toFixed(5) }}, {{ Number(item.location.longitude).toFixed(5) }}</small></div></button></div>
       <p v-if="!filteredPhotos.length" class="empty">這個篩選目前沒有照片。</p>
-      <div v-if="totalPages > 1" class="pagination">
-        <button type="button" :disabled="page <= 1" @click="page--">上一頁</button>
-        <span>{{ page }} / {{ totalPages }}</span>
-        <button type="button" :disabled="page >= totalPages" @click="page++">下一頁</button>
-      </div>
+      <div v-if="totalPages > 1" class="pagination"><button type="button" :disabled="page <= 1" @click="page--">上一頁</button><span>{{ page }} / {{ totalPages }}</span><button type="button" :disabled="page >= totalPages" @click="page++">下一頁</button></div>
     </section>
 
     <section v-else class="editor">
-      <div class="photo-pane">
-        <div class="stepbar">
-          <button type="button" @click="goRelative(-1)">← 上一張</button>
-          <strong>1. 看照片</strong>
-          <button type="button" @click="goRelative(1)">下一張 →</button>
-        </div>
+      <div class="photo-pane"><div class="stepbar"><button type="button" @click="goRelative(-1)">← 上一張</button><strong>1. 看照片</strong><button type="button" @click="goRelative(1)">下一張 →</button></div><div v-if="selectedMemory" class="memory-title"><small>{{ String(selectedMemory.memory_date || '').slice(0,10) }}</small><h2>{{ selectedMemory.title }}</h2></div><img class="main-photo" :src="selectedImageUrl" alt="目前要定位的照片" loading="lazy" /><div v-if="selectedMemory" class="siblings"><button v-for="url in imageUrls(selectedMemory)" :key="url" type="button" :class="{active:url===selectedImageUrl,located:hasLocation(selectedMemory.id,url)}" @click="selectImage(url)"><img :src="thumbnailUrl(selectedMemory, url)" alt="" loading="lazy" decoding="async" /><span>{{ hasLocation(selectedMemory.id,url) ? '已定位' : '未定位' }}</span></button></div></div>
 
-        <div v-if="selectedMemory" class="memory-title">
-          <small>{{ String(selectedMemory.memory_date || '').slice(0,10) }}</small>
-          <h2>{{ selectedMemory.title }}</h2>
-        </div>
-
-        <img class="main-photo" :src="selectedImageUrl" alt="目前要定位的照片" />
-
-        <div v-if="selectedMemory" class="siblings">
-          <button v-for="url in imageUrls(selectedMemory)" :key="url" type="button" :class="{active:url===selectedImageUrl,located:hasLocation(selectedMemory.id,url)}" @click="selectImage(url)">
-            <img :src="url" alt="" />
-            <span>{{ hasLocation(selectedMemory.id,url) ? '已定位' : '未定位' }}</span>
-          </button>
-        </div>
-      </div>
-
-      <div class="map-pane">
-        <div class="map-callout" :class="{ existing: selectedImageLocation }">
-          <div class="pin-icon">📍</div>
-          <div>
-            <strong>{{ selectedImageLocation ? '目前定位點' : '2. 直接點地圖插針' }}</strong>
-            <span>{{ selectedImageLocation ? '已自動移到目前座標；拖曳圖釘可修正位置' : '點一下就會出現圖釘，也可以拖曳微調' }}</span>
-          </div>
-        </div>
-
-        <div v-if="selectedImageLocation" class="current-location">
-          <div><span>地點</span><strong>{{ selectedImageLocation.location_name || '未命名' }}</strong></div>
-          <div><span>緯度</span><strong>{{ Number(selectedImageLocation.latitude).toFixed(7) }}</strong></div>
-          <div><span>經度</span><strong>{{ Number(selectedImageLocation.longitude).toFixed(7) }}</strong></div>
-          <div><span>來源</span><strong>{{ selectedImageLocation.source || 'unknown' }}</strong></div>
-        </div>
-
-        <div ref="mapElement" class="admin-map"></div>
-
-        <div class="form-card">
-          <strong class="step-label">3. 確認後儲存</strong>
-          <label>地點名稱<input v-model="locationName" placeholder="例如：軍艦岩、淡水老街" /></label>
-          <div class="coords">
-            <label>緯度<input v-model="latitude" inputmode="decimal" /></label>
-            <label>經度<input v-model="longitude" inputmode="decimal" /></label>
-          </div>
-          <button class="save" type="button" :disabled="saving" @click="saveLocation">{{ saving ? '儲存中…' : selectedImageLocation ? '儲存修正後的位置' : '儲存這張照片的定位' }}</button>
-          <button v-if="selectedImageLocation" class="remove" type="button" @click="removeLocation">清除這張照片的定位</button>
-          <p v-if="statusMessage" class="ok">{{ statusMessage }}</p>
-          <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
-        </div>
-      </div>
+      <div class="map-pane"><div class="map-callout" :class="{ existing: selectedImageLocation }"><div class="pin-icon">📍</div><div><strong>{{ selectedImageLocation ? '目前定位點' : '2. 直接點地圖插針' }}</strong><span>{{ selectedImageLocation ? '已自動移到目前座標；拖曳圖釘可修正位置' : '點一下就會出現圖釘，也可以拖曳微調' }}</span></div></div><div v-if="selectedImageLocation" class="current-location"><div><span>地點</span><strong>{{ selectedImageLocation.location_name || '未命名' }}</strong></div><div><span>緯度</span><strong>{{ Number(selectedImageLocation.latitude).toFixed(7) }}</strong></div><div><span>經度</span><strong>{{ Number(selectedImageLocation.longitude).toFixed(7) }}</strong></div><div><span>來源</span><strong>{{ selectedImageLocation.source || 'unknown' }}</strong></div></div><div ref="mapElement" class="admin-map"></div><div class="form-card"><strong class="step-label">3. 確認後儲存</strong><label>地點名稱<input v-model="locationName" placeholder="例如：軍艦岩、淡水老街" /></label><div class="coords"><label>緯度<input v-model="latitude" inputmode="decimal" /></label><label>經度<input v-model="longitude" inputmode="decimal" /></label></div><button class="save" type="button" :disabled="saving" @click="saveLocation">{{ saving ? '儲存中…' : selectedImageLocation ? '儲存修正後的位置' : '儲存這張照片的定位' }}</button><button v-if="selectedImageLocation" class="remove" type="button" @click="removeLocation">清除這張照片的定位</button><p v-if="statusMessage" class="ok">{{ statusMessage }}</p><p v-if="errorMessage" class="error">{{ errorMessage }}</p></div></div>
     </section>
   </main>
 </template>
