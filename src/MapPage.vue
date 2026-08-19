@@ -17,12 +17,7 @@ const memoryImages = computed(() => {
 })
 
 function escapeHtml(value) {
-  return String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;')
+  return String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;')
 }
 
 async function loadLocations() {
@@ -44,118 +39,50 @@ async function loadLocations() {
 
 function drawMap() {
   if (!mapElement.value || !window.L) return
-
   if (!map) {
     map = window.L.map(mapElement.value, { zoomControl: false }).setView([25.08, 121.52], 11)
     window.L.control.zoom({ position: 'topright' }).addTo(map)
-    window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxNativeZoom: 19,
-      maxZoom: 21,
-      attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map)
+    window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxNativeZoom: 19, maxZoom: 21, attribution: '&copy; OpenStreetMap contributors' }).addTo(map)
     markerLayer = window.L.layerGroup().addTo(map)
   }
 
   markerLayer.clearLayers()
   const bounds = []
-
   for (const item of locations.value) {
     const lat = Number(item.latitude)
     const lng = Number(item.longitude)
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue
     bounds.push([lat, lng])
-
-    const imageUrl = escapeHtml(item.image_url)
+    const imageUrl = escapeHtml(item.thumbnail_url || item.image_url)
     const label = escapeHtml(item.title || '照片')
     const icon = window.L.divIcon({
       className: 'photo-map-marker-wrap',
       html: `<div class="photo-map-marker" role="img" aria-label="${label}"><img src="${imageUrl}" alt="" /></div>`,
-      iconSize: [68, 68],
-      iconAnchor: [34, 68]
+      iconSize: [68, 68], iconAnchor: [34, 68]
     })
-
     const marker = window.L.marker([lat, lng], { icon }).addTo(markerLayer)
-    marker.on('click', () => {
-      selected.value = item
-      memoryModalOpen.value = false
-      map.panTo([lat, lng], { animate: true, duration: 0.35 })
-    })
+    marker.on('click', () => { selected.value = item; memoryModalOpen.value = false; map.panTo([lat, lng], { animate: true, duration: 0.35 }) })
   }
-
   if (bounds.length === 1) map.setView(bounds[0], 16)
   else if (bounds.length > 1) map.fitBounds(bounds, { padding: [56, 56], maxZoom: 15 })
 }
 
-function closePhoto() {
-  selected.value = null
-  memoryModalOpen.value = false
-}
-
-function openMemory() {
-  if (selected.value) memoryModalOpen.value = true
-}
-
-function closeMemory() {
-  memoryModalOpen.value = false
-}
-
+function closePhoto() { selected.value = null; memoryModalOpen.value = false }
+function openMemory() { if (selected.value) memoryModalOpen.value = true }
+function closeMemory() { memoryModalOpen.value = false }
 onMounted(loadLocations)
-onUnmounted(() => {
-  if (map) map.remove()
-  map = null
-})
+onUnmounted(() => { if (map) map.remove(); map = null })
 </script>
 
 <template>
   <main class="memory-map-page">
-    <div class="map-toolbar">
-      <a class="map-back" href="/">← 日常</a>
-      <div>
-        <strong>我們走過的地方</strong>
-        <small>{{ locations.length ? `${locations.length} 張有定位的照片` : '把回憶放回地圖上' }}</small>
-      </div>
-      <span class="toolbar-spacer" aria-hidden="true"></span>
-    </div>
-
+    <div class="map-toolbar"><a class="map-back" href="/">← 日常</a><div><strong>我們走過的地方</strong><small>{{ locations.length ? `${locations.length} 張有定位的照片` : '把回憶放回地圖上' }}</small></div><span class="toolbar-spacer" aria-hidden="true"></span></div>
     <div ref="mapElement" class="memory-map-canvas" aria-label="回憶地圖"></div>
-
     <div v-if="loading" class="map-status">正在打開我們的足跡…</div>
     <div v-else-if="errorMessage" class="map-status error">{{ errorMessage }}</div>
-    <div v-else-if="!locations.length" class="map-empty">
-      <span>♡</span>
-      <strong>地圖還是空的</strong>
-      <p>之後補上照片位置，回憶就會出現在這裡。</p>
-    </div>
-
-    <Transition name="photo-sheet">
-      <article v-if="selected" class="map-photo-sheet">
-        <button class="photo-close" type="button" aria-label="關閉" @click="closePhoto">×</button>
-        <img :src="selected.image_url" alt="地圖上的照片" />
-        <div class="photo-actions">
-          <div class="photo-meta">
-            <span>{{ String(selected.memory_date || '').slice(0, 10).replaceAll('-', '.') }}</span>
-            <span v-if="selected.location_name">{{ selected.location_name }}</span>
-          </div>
-          <button class="open-memory" type="button" @click="openMemory">查看這段回憶</button>
-        </div>
-      </article>
-    </Transition>
-
-    <Transition name="memory-modal">
-      <div v-if="memoryModalOpen && selected" class="memory-modal-backdrop" @click.self="closeMemory">
-        <article class="memory-modal" role="dialog" aria-modal="true" aria-label="回憶內容">
-          <button class="modal-close" type="button" aria-label="關閉回憶" @click="closeMemory">×</button>
-          <div class="modal-head">
-            <span>{{ String(selected.memory_date || '').slice(0, 10).replaceAll('-', '.') }}</span>
-            <h2>{{ selected.title }}</h2>
-            <p v-if="selected.story">{{ selected.story }}</p>
-          </div>
-          <div v-if="memoryImages.length" class="memory-photo-grid">
-            <img v-for="url in memoryImages" :key="url" :src="url" alt="回憶照片" loading="lazy" />
-          </div>
-        </article>
-      </div>
-    </Transition>
+    <div v-else-if="!locations.length" class="map-empty"><span>♡</span><strong>地圖還是空的</strong><p>之後補上照片位置，回憶就會出現在這裡。</p></div>
+    <Transition name="photo-sheet"><article v-if="selected" class="map-photo-sheet"><button class="photo-close" type="button" aria-label="關閉" @click="closePhoto">×</button><img :src="selected.image_url" alt="地圖上的照片" /><div class="photo-actions"><div class="photo-meta"><span>{{ String(selected.memory_date || '').slice(0, 10).replaceAll('-', '.') }}</span><span v-if="selected.location_name">{{ selected.location_name }}</span></div><button class="open-memory" type="button" @click="openMemory">查看這段回憶</button></div></article></Transition>
+    <Transition name="memory-modal"><div v-if="memoryModalOpen && selected" class="memory-modal-backdrop" @click.self="closeMemory"><article class="memory-modal" role="dialog" aria-modal="true" aria-label="回憶內容"><button class="modal-close" type="button" aria-label="關閉回憶" @click="closeMemory">×</button><div class="modal-head"><span>{{ String(selected.memory_date || '').slice(0, 10).replaceAll('-', '.') }}</span><h2>{{ selected.title }}</h2><p v-if="selected.story">{{ selected.story }}</p></div><div v-if="memoryImages.length" class="memory-photo-grid"><img v-for="url in memoryImages" :key="url" :src="url" alt="回憶照片" loading="lazy" /></div></article></div></Transition>
   </main>
 </template>
 
