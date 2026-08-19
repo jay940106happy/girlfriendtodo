@@ -14,6 +14,16 @@ function normalizedThumbs(memory) {
   })
 }
 
+function dateKey(value) {
+  if (!value) return ''
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString().slice(0, 10)
+  const text = String(value)
+  const iso = text.match(/^(\d{4}-\d{2}-\d{2})/)
+  if (iso) return iso[1]
+  const parsed = new Date(value)
+  return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString().slice(0, 10)
+}
+
 function taipeiToday() {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit'
@@ -57,7 +67,7 @@ export async function GET() {
     const today = taipeiToday()
     const thirtyDaysAgo = shiftDate(today, -30)
 
-    const homeMemories = memories.filter((memory) => String(memory.memory_date || '').slice(0, 10) === thirtyDaysAgo)
+    const homeMemories = memories.filter((memory) => dateKey(memory.memory_date) === thirtyDaysAgo)
     const homeUrls = homeMemories.map((memory) => normalizedThumbs(memory)[0]).filter(Boolean)
 
     const first20 = memories.slice(0, 20)
@@ -75,7 +85,7 @@ export async function GET() {
       return index >= 0 ? (thumbs[index] || location.image_url) : location.image_url
     }).filter(Boolean)
 
-    const todayMemories = memories.filter((memory) => String(memory.memory_date || '').slice(0, 10) === today)
+    const todayMemories = memories.filter((memory) => dateKey(memory.memory_date) === today)
     const calendarTodayUrls = todayMemories.flatMap((memory) => normalizedThumbs(memory).slice(0, 6))
 
     const memoriesJsonBytes = Buffer.byteLength(JSON.stringify(memories))
