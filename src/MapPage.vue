@@ -57,7 +57,7 @@ function drawMap() {
     const label = escapeHtml(item.title || '照片')
     const icon = window.L.divIcon({
       className: 'photo-map-marker-wrap',
-      html: `<div class="photo-map-marker" role="img" aria-label="${label}"><img src="${imageUrl}" alt="" /></div>`,
+      html: `<div class="photo-map-marker" role="img" aria-label="${label}"><img src="${imageUrl}" alt="" loading="lazy" decoding="async" fetchpriority="low" /></div>`,
       iconSize: [68, 68], iconAnchor: [34, 68]
     })
     const marker = window.L.marker([lat, lng], { icon }).addTo(markerLayer)
@@ -81,8 +81,8 @@ onUnmounted(() => { if (map) map.remove(); map = null })
     <div v-if="loading" class="map-status">正在打開我們的足跡…</div>
     <div v-else-if="errorMessage" class="map-status error">{{ errorMessage }}</div>
     <div v-else-if="!locations.length" class="map-empty"><span>♡</span><strong>地圖還是空的</strong><p>之後補上照片位置，回憶就會出現在這裡。</p></div>
-    <Transition name="photo-sheet"><article v-if="selected" class="map-photo-sheet"><button class="photo-close" type="button" aria-label="關閉" @click="closePhoto">×</button><img :src="selected.image_url" alt="地圖上的照片" /><div class="photo-actions"><div class="photo-meta"><span>{{ String(selected.memory_date || '').slice(0, 10).replaceAll('-', '.') }}</span><span v-if="selected.location_name">{{ selected.location_name }}</span></div><button class="open-memory" type="button" @click="openMemory">查看這段回憶</button></div></article></Transition>
-    <Transition name="memory-modal"><div v-if="memoryModalOpen && selected" class="memory-modal-backdrop" @click.self="closeMemory"><article class="memory-modal" role="dialog" aria-modal="true" aria-label="回憶內容"><button class="modal-close" type="button" aria-label="關閉回憶" @click="closeMemory">×</button><div class="modal-head"><span>{{ String(selected.memory_date || '').slice(0, 10).replaceAll('-', '.') }}</span><h2>{{ selected.title }}</h2><p v-if="selected.story">{{ selected.story }}</p></div><div v-if="memoryImages.length" class="memory-photo-grid"><img v-for="url in memoryImages" :key="url" :src="url" alt="回憶照片" loading="lazy" /></div></article></div></Transition>
+    <Transition name="photo-sheet"><article v-if="selected" class="map-photo-sheet"><button class="photo-close" type="button" aria-label="關閉" @click="closePhoto">×</button><img :src="selected.image_url" alt="地圖上的照片" decoding="async" /><div class="photo-actions"><div class="photo-meta"><span>{{ String(selected.memory_date || '').slice(0, 10).replaceAll('-', '.') }}</span><span v-if="selected.location_name">{{ selected.location_name }}</span></div><button class="open-memory" type="button" @click="openMemory">查看這段回憶</button></div></article></Transition>
+    <Transition name="memory-modal"><div v-if="memoryModalOpen && selected" class="memory-modal-backdrop" @click.self="closeMemory"><article class="memory-modal" role="dialog" aria-modal="true" aria-label="回憶內容"><button class="modal-close" type="button" aria-label="關閉回憶" @click="closeMemory">×</button><div class="modal-head"><span>{{ String(selected.memory_date || '').slice(0, 10).replaceAll('-', '.') }}</span><h2>{{ selected.title }}</h2><p v-if="selected.story">{{ selected.story }}</p></div><div v-if="memoryImages.length" class="memory-photo-grid"><img v-for="url in memoryImages" :key="url" :src="url" alt="回憶照片" loading="lazy" decoding="async" /></div></article></div></Transition>
   </main>
 </template>
 
