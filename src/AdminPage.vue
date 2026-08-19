@@ -3,11 +3,6 @@ import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 
 const memories = ref([])
 const locations = ref([])
-const loading = ref(true)
-const mode = ref('review')
-const searchText = ref('')
-const page = ref(1)
-const pageSize = 16
 const selectedMemoryId = ref('')
 const selectedImageUrl = ref('')
 const latitude = ref('')
@@ -16,6 +11,7 @@ const locationName = ref('')
 const saving = ref(false)
 const statusMessage = ref('')
 const errorMessage = ref('')
+const mode = ref('review')
 const mapElement = ref(null)
 let map = null
 let pin = null
@@ -30,60 +26,35 @@ function hasLocation(memoryId, imageUrl) {
 }
 
 const missingPhotos = computed(() => {
-  const q = searchText.value.trim().toLowerCase()
   const rows = []
   for (const memory of memories.value) {
-    const urls = imageUrls(memory)
-    urls.forEach((url, index) => {
-      if (hasLocation(memory.id, url)) return
-      const text = `${memory.title || ''} ${memory.story || ''} ${memory.memory_date || ''}`.toLowerCase()
-      if (q && !text.includes(q)) return
-      rows.push({
-        memoryId: memory.id,
-        title: memory.title || '未命名回憶',
-        story: memory.story || '',
-        memoryDate: memory.memory_date,
-        imageUrl: url,
-        imageIndex: index + 1,
-        imageCount: urls.length
-      })
+    imageUrls(memory).forEach((url, index) => {
+      if (!hasLocation(memory.id, url)) rows.push({ memory, url, index })
     })
   }
-  return rows.sort((a, b) => String(b.memoryDate || '').localeCompare(String(a.memoryDate || '')))
+  return rows.sort((a, b) => String(b.memory.memory_date || '').localeCompare(String(a.memory.memory_date || '')))
 })
 
-const totalPages = computed(() => Math.max(1, Math.ceil(missingPhotos.value.length / pageSize)))
-const pagedPhotos = computed(() => {
-  if (page.value > totalPages.value) page.value = totalPages.value
-  const start = (page.value - 1) * pageSize
-  return missingPhotos.value.slice(start, start + pageSize)
-})
-const selectedMemory = computed(() => memories.value.find((m) => m.id === selectedMemoryId.value) ?? null)
-const selectedImageLocation = computed(() => locations.value.find((x) => x.memory_id === selectedMemoryId.value && x.image_url === selectedImageUrl.value) ?? null)
-
-function resetMessages() {
-  statusMessage.value = ''
-  errorMessage.value = ''
-}
+const selectedMemory = computed(() => memories.value.find((m) => m.id === selectedMemoryId.value) || null)
+const selectedImageLocation = computed(() => locations.value.find((x) => x.memory_id === selectedMemoryId.value && x.image_url === selectedImageUrl.value) || null)
+const selectedMissingIndex = computed(() => missingPhotos.value.findIndex((x) => x.memory.id === selectedMemoryId.value && x.url === selectedImageUrl.value))
 
 async function openEditor(item) {
-  selectedMemoryId.value = item.memoryId
-  selectedImageUrl.value = item.imageUrl
+  selectedMemoryId.value = item.memory.id
+  selectedImageUrl.value = item.url
+  statusMessage.value = ''
+  errorMessage.value = ''
   mode.value = 'edit'
-  latitude.value = ''
-  longitude.value = ''
-  locationName.value = ''
-  resetMessages()
   await nextTick()
   initMap()
   loadSelectedLocation()
+  setTimeout(() => map?.invalidateSize(), 0)
 }
 
 function backToReview() {
   mode.value = 'review'
-  selectedMemoryId.value = ''
-  selectedImageUrl.value = ''
-  resetMessages()
+  statusMessage.value = ''
+  errorMessage.value = ''
   if (map) {
     map.remove()
     map = null
@@ -93,7 +64,8 @@ function backToReview() {
 
 function selectImage(url) {
   selectedImageUrl.value = url
-  resetMessages()
+  statusMessage.value = ''
+  errorMessage.value = ''
   loadSelectedLocation()
 }
 
@@ -139,40 +111,27 @@ function initMap() {
     longitude.value = event.latlng.lng.toFixed(7)
     movePin(event.latlng.lat, event.latlng.lng)
   })
-  setTimeout(() => map?.invalidateSize(), 0)
 }
 
-async function loadData() {
-  loading.value = true
-  try {
-    const [memoryResponse, locationResponse] = await Promise.all([
-      fetch('/api/memories'),
-      fetch('/api/locations')
-    ])
-    const memoryData = await memoryResponse.json().catch(() => [])
-    const locationData = await locationResponse.json().catch(() => [])
-    if (!memoryResponse.ok) throw new Error('讀取回憶失敗')
-    if (!locationResponse.ok) throw new Error('讀取定位失敗')
-    memories.value = Array.isArray(memoryData) ? memoryData : []
-    locations.value = Array.isArray(locationData) ? locationData : []
-  } catch (error) {
-    errorMessage.value = error?.message || '讀取資料失敗'
-  } finally {
-    loading.value = false
-  }
+function goRelativeMissing(step) {
+  if (!missingPhotos.value.length) return
+  let index = selectedMissingIndex.value
+  if (index < 0) index = 0
+  const next = (index + step + missingPhotos.value.length) % missingPhotos.value.length
+  openEditor(missingPhotos.value[next])
 }
 
 async function saveLocation() {
-  if (!selectedMemoryId.value || !selectedImageUrl.value) return
   const lat = Number(latitude.value)
   const lng = Number(longitude.value)
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-    errorMessage.value = '請先在地圖上放置圖釘。'
+    errorMessage.value = '請先在右側地圖點一下放置圖釘。'
     return
   }
 
   saving.value = true
-  resetMessages()
+  statusMessage.value = ''
+  errorMessage.value = ''
   try {
     const response = await fetch('/api/locations', {
       method: 'POST',
@@ -191,7 +150,7 @@ async function saveLocation() {
     const index = locations.value.findIndex((x) => x.memory_id === data.memory_id && x.image_url === data.image_url)
     if (index >= 0) locations.value[index] = { ...locations.value[index], ...data }
     else locations.value.push(data)
-    statusMessage.value = '已儲存定位。'
+    statusMessage.value = '已儲存這張照片的定位。'
   } catch (error) {
     errorMessage.value = error?.message || '儲存失敗'
   } finally {
@@ -216,93 +175,96 @@ async function removeLocation() {
   statusMessage.value = '已清除定位。'
 }
 
+async function loadData() {
+  try {
+    const [memoryResponse, locationResponse] = await Promise.all([
+      fetch('/api/memories'),
+      fetch('/api/locations')
+    ])
+    const memoryData = await memoryResponse.json().catch(() => [])
+    const locationData = await locationResponse.json().catch(() => [])
+    if (!memoryResponse.ok) throw new Error('讀取回憶失敗')
+    if (!locationResponse.ok) throw new Error('讀取定位失敗')
+    memories.value = Array.isArray(memoryData) ? memoryData : []
+    locations.value = Array.isArray(locationData) ? locationData : []
+  } catch (error) {
+    errorMessage.value = error?.message || '讀取資料失敗'
+  }
+}
+
 onMounted(loadData)
 onUnmounted(() => map?.remove())
 </script>
 
 <template>
   <main class="admin-page">
-    <header class="admin-header">
+    <header class="topbar">
       <div>
         <a href="/">← 回首頁</a>
         <h1>照片定位管理</h1>
-        <p v-if="mode === 'review'">先看照片內容，再決定真正的位置。</p>
-        <p v-else>精準點選或拖曳圖釘後儲存。</p>
+        <p>未定位 {{ missingPhotos.length }} 張</p>
       </div>
-      <a href="/map" class="map-link">看地圖</a>
+      <button v-if="mode === 'edit'" type="button" @click="backToReview">回待補照片牆</button>
     </header>
 
-    <section v-if="mode === 'review'" class="review-wrap">
-      <div class="review-toolbar">
-        <div>
-          <strong>待補定位</strong>
-          <span>共 {{ missingPhotos.length }} 張</span>
-        </div>
-        <input v-model="searchText" @input="page = 1" type="search" placeholder="搜尋標題、日期或內容" />
+    <section v-if="mode === 'review'" class="review">
+      <div class="review-intro">
+        <h2>待補定位照片</h2>
+        <p>點任一張照片，下一個畫面右側就是地圖，直接點地圖插針。</p>
       </div>
-
-      <div v-if="loading" class="empty-state">載入中…</div>
-      <div v-else-if="errorMessage" class="empty-state error">{{ errorMessage }}</div>
-      <div v-else-if="!missingPhotos.length" class="empty-state">全部照片都有定位了 🎉</div>
-
-      <div v-else class="photo-grid">
-        <button v-for="item in pagedPhotos" :key="`${item.memoryId}-${item.imageUrl}`" class="review-card" type="button" @click="openEditor(item)">
-          <div class="photo-frame">
-            <img :src="item.imageUrl" :alt="item.title" loading="lazy" />
-            <span>{{ item.imageIndex }}/{{ item.imageCount }}</span>
-          </div>
-          <div class="review-copy">
-            <strong>{{ item.title }}</strong>
-            <small>{{ String(item.memoryDate || '').slice(0, 10) }}</small>
+      <div class="photo-wall">
+        <button v-for="item in missingPhotos" :key="item.memory.id + item.url" type="button" class="photo-card" @click="openEditor(item)">
+          <img :src="item.url" alt="" loading="lazy" />
+          <div>
+            <strong>{{ item.memory.title }}</strong>
+            <span>{{ String(item.memory.memory_date || '').slice(0,10) }} · 第 {{ item.index + 1 }} 張</span>
           </div>
         </button>
       </div>
-
-      <div v-if="totalPages > 1" class="pagination">
-        <button type="button" :disabled="page <= 1" @click="page--">上一頁</button>
-        <span>{{ page }} / {{ totalPages }}</span>
-        <button type="button" :disabled="page >= totalPages" @click="page++">下一頁</button>
-      </div>
+      <p v-if="!missingPhotos.length" class="empty">目前沒有未定位照片。</p>
     </section>
 
-    <section v-else class="editor-wrap">
-      <button class="back-review" type="button" @click="backToReview">← 回待補照片</button>
+    <section v-else class="editor">
+      <div class="photo-pane">
+        <div class="stepbar">
+          <button type="button" @click="goRelativeMissing(-1)">← 上一張未定位</button>
+          <strong>1. 看照片</strong>
+          <button type="button" @click="goRelativeMissing(1)">下一張未定位 →</button>
+        </div>
 
-      <div v-if="selectedMemory" class="editor-heading">
-        <div>
-          <small>{{ String(selectedMemory.memory_date || '').slice(0, 10) }}</small>
+        <div v-if="selectedMemory" class="memory-title">
+          <small>{{ String(selectedMemory.memory_date || '').slice(0,10) }}</small>
           <h2>{{ selectedMemory.title }}</h2>
-          <p v-if="selectedMemory.story">{{ selectedMemory.story }}</p>
+        </div>
+
+        <img class="main-photo" :src="selectedImageUrl" alt="目前要定位的照片" />
+
+        <div v-if="selectedMemory" class="siblings">
+          <button v-for="url in imageUrls(selectedMemory)" :key="url" type="button" :class="{active:url===selectedImageUrl,located:hasLocation(selectedMemory.id,url)}" @click="selectImage(url)">
+            <img :src="url" alt="" />
+            <span>{{ hasLocation(selectedMemory.id,url) ? '已定位' : '未定位' }}</span>
+          </button>
         </div>
       </div>
 
-      <div v-if="selectedMemory" class="photo-strip">
-        <button v-for="url in imageUrls(selectedMemory)" :key="url" type="button" :class="{ active: url === selectedImageUrl, located: hasLocation(selectedMemory.id, url) }" @click="selectImage(url)">
-          <img :src="url" alt="" />
-          <span>{{ hasLocation(selectedMemory.id, url) ? '✓' : '＋' }}</span>
-        </button>
-      </div>
-
-      <div class="workspace">
-        <div class="selected-photo">
-          <img v-if="selectedImageUrl" :src="selectedImageUrl" alt="目前選取照片" />
-          <span>{{ selectedImageLocation ? '這張已有定位' : '這張還沒定位' }}</span>
+      <div class="map-pane">
+        <div class="map-callout">
+          <div class="pin-icon">📍</div>
+          <div><strong>2. 直接點地圖插針</strong><span>點一下就會出現圖釘，也可以拖曳微調</span></div>
         </div>
+        <div ref="mapElement" class="admin-map"></div>
 
-        <div class="map-form">
-          <div ref="mapElement" class="admin-map"></div>
-          <p class="map-tip">地圖可放大到街道層級；直接點一下放針，也可以拖曳微調。</p>
+        <div class="form-card">
+          <strong class="step-label">3. 確認後儲存</strong>
+          <label>地點名稱<input v-model="locationName" placeholder="例如：軍艦岩、淡水老街" /></label>
           <div class="coords">
             <label>緯度<input v-model="latitude" inputmode="decimal" /></label>
             <label>經度<input v-model="longitude" inputmode="decimal" /></label>
           </div>
-          <label>地點名稱<input v-model="locationName" placeholder="例如：軍艦岩觀景點" /></label>
-          <div class="actions">
-            <button class="save" type="button" :disabled="saving" @click="saveLocation">{{ saving ? '儲存中…' : '儲存定位' }}</button>
-            <button v-if="selectedImageLocation" class="remove" type="button" @click="removeLocation">清除定位</button>
-          </div>
-          <p v-if="statusMessage" class="message ok">{{ statusMessage }}</p>
-          <p v-if="errorMessage" class="message error">{{ errorMessage }}</p>
+          <button class="save" type="button" :disabled="saving" @click="saveLocation">{{ saving ? '儲存中…' : '儲存這張照片的定位' }}</button>
+          <button v-if="selectedImageLocation" class="remove" type="button" @click="removeLocation">清除這張照片的定位</button>
+          <p v-if="statusMessage" class="ok">{{ statusMessage }}</p>
+          <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
         </div>
       </div>
     </section>
@@ -310,5 +272,5 @@ onUnmounted(() => map?.remove())
 </template>
 
 <style scoped>
-.admin-page{min-height:100vh;box-sizing:border-box;background:#f6f2ed;color:#382f2b;padding:24px}.admin-header{max-width:1260px;margin:0 auto 20px;display:flex;align-items:flex-end;justify-content:space-between;gap:16px}.admin-header a{color:#816256;text-decoration:none;font-size:13px}.admin-header h1{margin:8px 0 3px;font-size:27px}.admin-header p{margin:0;color:#958078;font-size:13px}.map-link{padding:9px 13px;border:1px solid #ded0c8;border-radius:13px;background:#fffaf7}.review-wrap,.editor-wrap{max-width:1260px;margin:0 auto}.review-toolbar{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:16px}.review-toolbar>div{display:flex;align-items:baseline;gap:9px}.review-toolbar strong{font-size:20px}.review-toolbar span{color:#9a857b;font-size:12px}.review-toolbar input{width:min(340px,46vw);border:1px solid #ddd0c8;border-radius:13px;background:#fffdfa;padding:10px 12px;font:inherit;color:inherit}.photo-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.review-card{padding:0;border:1px solid #e4d9d3;border-radius:18px;background:#fffdfa;color:inherit;overflow:hidden;text-align:left;box-shadow:0 4px 14px rgba(75,53,42,.05);transition:.15s ease}.review-card:hover{transform:translateY(-2px);box-shadow:0 8px 22px rgba(75,53,42,.1)}.photo-frame{position:relative;aspect-ratio:4/3;background:#ebe4df;overflow:hidden}.photo-frame img{display:block;width:100%;height:100%;object-fit:cover}.photo-frame span{position:absolute;right:8px;bottom:8px;padding:4px 7px;border-radius:9px;background:rgba(43,32,27,.72);color:#fff;font-size:10px}.review-copy{padding:10px 11px 12px}.review-copy strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}.review-copy small{display:block;margin-top:4px;color:#9b877d;font-size:11px}.pagination{display:flex;justify-content:center;align-items:center;gap:13px;margin:22px 0}.pagination button,.back-review{border:1px solid #dfd1ca;border-radius:12px;background:#fffaf7;padding:8px 12px;color:#76594e}.pagination button:disabled{opacity:.4}.pagination span{color:#8e786e;font-size:12px}.empty-state{padding:70px 20px;text-align:center;color:#907c73}.empty-state.error{color:#a35049}.back-review{margin-bottom:14px}.editor-wrap{padding:18px;border:1px solid #e3d8d1;border-radius:22px;background:#fffdfa}.editor-heading small{color:#9a857b}.editor-heading h2{margin:3px 0 5px;font-size:22px}.editor-heading p{margin:0;max-width:760px;color:#746159;font-size:13px;line-height:1.5}.photo-strip{display:flex;gap:8px;overflow:auto;padding:14px 0}.photo-strip button{position:relative;flex:0 0 76px;height:76px;padding:0;border:2px solid transparent;border-radius:13px;background:#eee7e2;overflow:hidden}.photo-strip button.active{border-color:#a46d64}.photo-strip img{width:100%;height:100%;object-fit:cover}.photo-strip span{position:absolute;right:4px;bottom:4px;display:grid;place-items:center;width:20px;height:20px;border-radius:50%;background:#b6766d;color:white;font-size:11px}.photo-strip button.located span{background:#68836d}.workspace{display:grid;grid-template-columns:minmax(280px,420px) 1fr;gap:18px}.selected-photo{position:relative;min-height:300px}.selected-photo img{width:100%;max-height:620px;object-fit:contain;border-radius:16px;background:#eee7e2}.selected-photo span{position:absolute;left:10px;bottom:10px;padding:6px 9px;border-radius:9px;background:rgba(44,33,28,.75);color:white;font-size:11px}.admin-map{height:470px;border-radius:16px;overflow:hidden}.map-tip{margin:7px 0 12px;color:#8e796f;font-size:12px}.coords{display:grid;grid-template-columns:1fr 1fr;gap:10px}.map-form label{display:block;margin-top:9px;color:#705d54;font-size:12px}.map-form input{box-sizing:border-box;width:100%;margin-top:5px;border:1px solid #ded2ca;border-radius:11px;background:white;padding:9px 10px;font:inherit}.actions{display:flex;gap:9px;margin-top:14px}.actions button{border:0;border-radius:12px;padding:10px 14px;font-weight:650}.save{background:#99665d;color:white}.remove{background:#eee3dd;color:#885b54}.message{margin:9px 0 0;font-size:13px}.message.ok{color:#5f7e66}.message.error{color:#a14f48}@media(max-width:980px){.photo-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.workspace{grid-template-columns:1fr}.selected-photo img{max-height:430px}}@media(max-width:650px){.admin-page{padding:12px}.photo-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.review-toolbar{align-items:stretch;flex-direction:column}.review-toolbar input{width:100%}.photo-frame{aspect-ratio:1/1}.admin-header h1{font-size:22px}.editor-wrap{padding:12px}.admin-map{height:360px}.coords{grid-template-columns:1fr 1fr}}
+.admin-page{min-height:100vh;box-sizing:border-box;background:#f6f2ed;color:#372d29;padding:20px}.topbar{max-width:1440px;margin:0 auto 18px;display:flex;align-items:end;justify-content:space-between;gap:16px}.topbar a{color:#7a5d52;text-decoration:none;font-size:13px}.topbar h1{margin:7px 0 2px;font-size:28px}.topbar p{margin:0;color:#8d7970;font-size:13px}.topbar button{border:1px solid #dccfc8;border-radius:12px;background:#fffaf7;padding:9px 12px;color:#70544b}.review{max-width:1440px;margin:0 auto}.review-intro{margin-bottom:14px}.review-intro h2{margin:0 0 4px}.review-intro p{margin:0;color:#8d7970}.photo-wall{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.photo-card{padding:0;border:1px solid #e1d6cf;border-radius:18px;background:#fffdfa;color:inherit;overflow:hidden;text-align:left;box-shadow:0 4px 14px rgba(60,42,34,.05)}.photo-card img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;background:#ece5e0}.photo-card div{padding:10px 11px}.photo-card strong{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:14px}.photo-card span{display:block;margin-top:4px;color:#9a867c;font-size:11px}.empty{text-align:center;color:#8e7b72;padding:60px 0}.editor{max-width:1440px;margin:0 auto;display:grid;grid-template-columns:minmax(360px,44%) minmax(0,56%);gap:18px;align-items:start}.photo-pane,.map-pane{border:1px solid #e1d6cf;border-radius:20px;background:#fffdfa;padding:14px}.stepbar{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;margin-bottom:10px}.stepbar strong{text-align:center}.stepbar button{border:1px solid #ddd0c8;border-radius:11px;background:#fff7f3;padding:8px 10px;color:#73564d}.stepbar button:last-child{justify-self:end}.memory-title small{color:#9a867c}.memory-title h2{margin:4px 0 10px;font-size:20px}.main-photo{display:block;width:100%;max-height:62vh;object-fit:contain;border-radius:15px;background:#ece5e0}.siblings{display:flex;gap:8px;overflow-x:auto;padding-top:10px}.siblings button{position:relative;flex:0 0 82px;height:82px;padding:0;border:3px solid transparent;border-radius:12px;overflow:hidden;background:#eee}.siblings button.active{border-color:#a46c62}.siblings button.located{opacity:.65}.siblings img{width:100%;height:100%;object-fit:cover}.siblings span{position:absolute;left:4px;right:4px;bottom:4px;padding:3px;border-radius:7px;background:rgba(40,30,26,.72);color:#fff;font-size:9px}.map-callout{display:flex;gap:10px;align-items:center;margin-bottom:10px;padding:14px;border:2px solid #dca99a;border-radius:15px;background:#fff0e9}.pin-icon{font-size:28px}.map-callout strong{display:block;font-size:18px;color:#6d493e}.map-callout span{display:block;margin-top:3px;color:#9a7165;font-size:12px}.admin-map{height:60vh;min-height:500px;border-radius:16px;overflow:hidden;box-shadow:inset 0 0 0 1px #ded2ca}.form-card{padding-top:13px}.step-label{display:block;margin-bottom:9px;font-size:16px}.form-card label{display:block;color:#6b5951;font-size:12px}.form-card input{box-sizing:border-box;width:100%;margin-top:5px;border:1px solid #dccfc8;border-radius:11px;background:white;padding:10px 11px;font:inherit;color:inherit}.coords{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px}.save,.remove{width:100%;margin-top:12px;border:0;border-radius:13px;padding:12px;font-weight:700}.save{background:#9d675e;color:white}.remove{background:#efe4de;color:#8b5951}.ok{color:#5f7c64}.error{color:#a14e48}@media(max-width:920px){.photo-wall{grid-template-columns:repeat(2,minmax(0,1fr))}.editor{grid-template-columns:1fr}.admin-map{height:52vh;min-height:360px}}@media(max-width:520px){.admin-page{padding:10px}.photo-wall{grid-template-columns:1fr 1fr;gap:8px}.photo-card div{padding:8px}.topbar h1{font-size:22px}.stepbar{grid-template-columns:1fr 1fr}.stepbar strong{grid-column:1/-1;grid-row:1}.stepbar button{grid-row:2;font-size:11px}.admin-map{min-height:340px;height:48vh}.coords{grid-template-columns:1fr}}
 </style>
