@@ -1,9 +1,10 @@
 import { sql } from './_db.js'
 import { ensureImageLocationsTable, normalizeCoordinate } from './_locations.js'
+import { ensureMemoryThumbnailColumn } from './_memory_images.js'
 
 export async function GET(request) {
   try {
-    await ensureImageLocationsTable()
+    await Promise.all([ensureImageLocationsTable(), ensureMemoryThumbnailColumn()])
     const { searchParams } = new URL(request.url)
     const memoryId = searchParams.get('memory_id')
 
@@ -21,6 +22,7 @@ export async function GET(request) {
       select
         l.memory_id,
         l.image_url,
+        coalesce(nullif(m.thumbnail_urls[array_position(m.image_urls, l.image_url)], ''), l.image_url) as thumbnail_url,
         l.latitude,
         l.longitude,
         l.location_name,
@@ -31,7 +33,8 @@ export async function GET(request) {
         m.story,
         m.memory_date,
         m.image_url as memory_cover_url,
-        m.image_urls
+        m.image_urls,
+        m.thumbnail_urls
       from image_locations l
       join memories m on m.id = l.memory_id
       order by coalesce(m.memory_date, m.created_at::date) desc, l.created_at asc
@@ -63,12 +66,7 @@ export async function POST(request) {
       insert into image_locations (memory_id, image_url, latitude, longitude, location_name, source)
       values (${memoryId}, ${imageUrl}, ${latitude}, ${longitude}, ${locationName}, ${source})
       on conflict (memory_id, image_url)
-      do update set
-        latitude = excluded.latitude,
-        longitude = excluded.longitude,
-        location_name = excluded.location_name,
-        source = excluded.source,
-        updated_at = now()
+      do update set latitude = excluded.latitude, longitude = excluded.longitude, location_name = excluded.location_name, source = excluded.source, updated_at = now()
       returning memory_id, image_url, latitude, longitude, location_name, source, created_at, updated_at
     `
 
@@ -85,16 +83,8 @@ export async function DELETE(request) {
     const body = await request.json()
     const memoryId = String(body.memory_id ?? '').trim()
     const imageUrl = String(body.image_url ?? '').trim()
-
-    if (!memoryId || !imageUrl) {
-      return Response.json({ error: 'memory_id and image_url are required.' }, { status: 400 })
-    }
-
-    await sql`
-      delete from image_locations
-      where memory_id = ${memoryId} and image_url = ${imageUrl}
-    `
-
+    if (!memoryId || !imageUrl) return Response.json({ error: 'memory_id and image_url are required.' }, { status: 400 })
+    await sql`delete from image_locations where memory_id = ${memoryId} and image_url = ${imageUrl}`
     return new Response(null, { status: 204 })
   } catch (error) {
     console.error(error)
